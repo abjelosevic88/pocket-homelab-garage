@@ -531,11 +531,22 @@ html, body { overflow-x: hidden; }
 .hero.garage .odo-big { color: #fff; }
 .hero.garage .odo-big small { color: rgba(255,255,255,.8); }
 .filter-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
-.inline-list { display: grid; gap: 6px; }
-.inline-list .li { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.inline-list { display: grid; gap: 6px; min-width: 0; max-width: 100%; }
+.inline-list .li { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; min-width: 0; max-width: 100%; }
 .inline-list .li:last-child { border-bottom: 0; }
-.inline-list .li .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inline-list .li > * { min-width: 0; max-width: 100%; }
+/* the title takes the room; when the date + amount no longer fit beside it they wrap onto a second line, right-aligned */
+.inline-list .li .grow { flex: 1 1 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inline-list .li > .money { margin-left: auto; white-space: nowrap; }
+.inline-list .li > .small, .inline-list .li > .muted { white-space: nowrap; }
+.card-body { overflow: hidden; }
 .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 12px; }
 .doc-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface); display: grid; gap: 4px; }
 .doc-card .ext { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted); }
 .stage-pill { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+/* iOS Safari zooms the page when a focused control's font is under 16px — every modal autofocuses one. */
+@media (max-width: 900px) {
+  input, select, textarea, .sel-btn, .sel-search input, .money-input { font-size: 16px; }
+  input[type="checkbox"] { font-size: inherit; }
+  .modal { max-height: 92dvh; }
+}
