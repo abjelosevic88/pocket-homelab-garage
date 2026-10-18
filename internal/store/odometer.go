@@ -57,7 +57,7 @@ func (s *Store) OdometerHistory(ctx context.Context, vehicleID int64) ([]Odomete
 		return nil, err
 	}
 	defer rows.Close()
-	var asc []OdometerReading
+	asc := []OdometerReading{}
 	for rows.Next() {
 		var o OdometerReading
 		if err := rows.Scan(&o.ID, &o.Date, &o.Reading, &o.Notes, &o.Source, &o.LinkKind, &o.LinkID, &o.CreatedAt); err != nil {

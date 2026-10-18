@@ -57,7 +57,7 @@ func (s *Store) ListFuel(ctx context.Context, vehicleID int64) ([]Fuel, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var asc []Fuel
+	asc := []Fuel{}
 	for rows.Next() {
 		f, err := scanFuel(rows)
 		if err != nil {

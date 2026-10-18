@@ -371,7 +371,13 @@ func (s *Server) handleVehicleOverview(w http.ResponseWriter, r *http.Request) {
 	}
 	sortReminders(rems)
 	recent, _ := s.store.ListRecords(ctx, v.ID, store.RecordFilter{Limit: 8})
+	if recent == nil {
+		recent = []store.Record{}
+	}
 	fuel, _ := s.store.ListFuel(ctx, v.ID)
+	if fuel == nil {
+		fuel = []store.Fuel{}
+	}
 	if len(fuel) > 8 {
 		fuel = fuel[:8]
 	}
@@ -383,7 +389,7 @@ func (s *Server) handleVehicleOverview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	notes, _ := s.store.ListNotes(ctx, v.ID)
-	var pinned []store.Note
+	pinned := []store.Note{}
 	for _, n := range notes {
 		if n.Pinned {
 			pinned = append(pinned, n)
@@ -392,6 +398,18 @@ func (s *Server) handleVehicleOverview(w http.ResponseWriter, r *http.Request) {
 	docs, _ := s.store.ExpiringDocuments(ctx, v.ID, addDays(today, 60))
 	months, _ := s.store.CostsByMonth(ctx, v.ID, addMonths(today[:7]+"-01", -11), today)
 	activity, _ := s.store.ListActivity(ctx, v.ID, 10)
+	if activity == nil {
+		activity = []store.Activity{}
+	}
+	if rems == nil {
+		rems = []store.Reminder{}
+	}
+	if docs == nil {
+		docs = []store.Document{}
+	}
+	if months == nil {
+		months = []store.MonthlyCost{}
+	}
 	cl := s.clients(ctx)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"vehicle": v, "reminders": rems, "recent_records": recent, "recent_fuel": fuel, "open_plans": open, "pinned_notes": pinned,

@@ -21,6 +21,7 @@ export default function OdometerTab() {
   const sync = async () => { setBusy(true); try { const r = await api.post<{ days: number }>(`${V1}/vehicles/${v.id}/dawarich/sync`); toast(`Dawarich: ${r.days} days refreshed`); reload(); reloadOv() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) } }
   if (loading && !data) return <Loading />
   if (!data) return null
+  data.history = data.history || []
   const series = [...data.history].reverse().map(o => ({ x: fmtDate(o.date, false), y: o.reading }))
   const src: Record<string, string> = { manual: 'reading', api: 'app', dawarich: 'Dawarich', lubelogger: 'LubeLogger', fuel: 'fill-up', record: 'service' }
   return (

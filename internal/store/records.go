@@ -16,6 +16,9 @@ func scanRecord(row interface{ Scan(...any) error }) (*Record, error) {
 	}
 	r.Parts = []Part{}
 	_ = json.Unmarshal([]byte(parts), &r.Parts)
+	if r.Parts == nil {
+		r.Parts = []Part{}
+	}
 	return &r, nil
 }
 

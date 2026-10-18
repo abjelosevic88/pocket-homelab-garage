@@ -32,7 +32,14 @@ export default function VehiclePage() {
   const [ov, setOv] = useState<Overview | null>(null)
   const [err, setErr] = useState('')
   const [modal, setModal] = useState<'fuel' | 'record' | 'edit' | null>(null)
-  const load = async () => { try { setOv(await api.get<Overview>(`${V1}/vehicles/${id}/overview`)); setErr('') } catch (e) { setErr((e as Error).message) } }
+  const load = async () => {
+    try {
+      const o = await api.get<Overview>(`${V1}/vehicles/${id}/overview`)
+      // never let a null list from the API blank the page
+      for (const k of ['reminders', 'recent_records', 'recent_fuel', 'pinned_notes', 'expiring_documents', 'months', 'activity', 'trips'] as const) if (!o[k]) (o as unknown as Record<string, unknown>)[k] = []
+      setOv(o); setErr('')
+    } catch (e) { setErr((e as Error).message) }
+  }
   useEffect(() => { setOv(null); load() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
   if (err) return <div className="callout danger">{err} — <Link to="/vehicles">back to vehicles</Link></div>
   if (!ov) return <Loading />
