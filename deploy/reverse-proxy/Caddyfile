@@ -1,0 +1,6 @@
+# Pocket Garage behind Caddy. The /api/* LubeLogger-compatible routes and
+# /cal/*.ics must stay reachable without a forward-auth proxy in front — the
+# phone app and calendar clients send their own credentials.
+garage.example.com {
+	reverse_proxy pocket-garage:8080
+}

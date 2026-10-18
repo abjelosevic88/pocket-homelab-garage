@@ -1,0 +1,10 @@
+{
+  "name": "Pocket Garage",
+  "short_name": "Garage",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#c2410c",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }, { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }],
+  "shortcuts": [{ "name": "Log a fill-up", "url": "/quick?kind=fuel" }, { "name": "Log an odometer reading", "url": "/quick?kind=odometer" }]
+}

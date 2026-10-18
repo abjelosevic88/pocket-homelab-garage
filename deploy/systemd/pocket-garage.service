@@ -1,0 +1,23 @@
+[Unit]
+Description=Pocket Garage — self-hosted vehicle log
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pocket-garage
+Group=pocket-garage
+ExecStart=/usr/local/bin/pocket-garage
+Environment=DATA_DIR=/var/lib/pocket-garage
+Environment=PORT=8080
+Environment=BASE_URL=https://garage.example.com
+Environment=SECURE_COOKIES=true
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pocket-garage
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
