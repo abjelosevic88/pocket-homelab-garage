@@ -100,6 +100,7 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	set(&st.NotifyURL, s.cfg.NotifyURL)
 	set(&st.TravelURL, s.cfg.TravelURL)
 	set(&st.TravelToken, s.cfg.TravelToken)
+	set(&st.TravelPublicURL, s.cfg.TravelPublicURL)
 	set(&st.InventoryURL, s.cfg.InventoryURL)
 	set(&st.InventoryToken, s.cfg.InventoryToken)
 	if s.cfg.NotifyFormat != "" && st.NotifyURL == s.cfg.NotifyURL && st.NotifyFormat != s.cfg.NotifyFormat {

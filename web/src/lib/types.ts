@@ -9,7 +9,7 @@ export interface Settings {
   firefly_url: string; firefly_token: string; firefly_configured: boolean; firefly_category: string; firefly_account: string; firefly_auto_sync: boolean
   dawarich_url: string; dawarich_api_key: string; dawarich_configured: boolean
   notify_url: string; notify_format: string; notify_hour: number; notify_digest: boolean; notify_configured: boolean
-  travel_url: string; travel_token: string; travel_configured: boolean
+  travel_url: string; travel_public_url: string; travel_token: string; travel_configured: boolean
   inventory_url: string; inventory_token: string; inventory_configured: boolean
   max_upload_bytes: number; setup_complete: boolean; base_url: string
 }

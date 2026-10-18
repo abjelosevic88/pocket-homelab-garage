@@ -345,6 +345,7 @@ type Settings struct {
 	NotifyDigest    bool   `json:"notify_digest"` // weekly Monday digest
 	TravelURL       string `json:"travel_url"`
 	TravelToken     string `json:"travel_token"`
+	TravelPublicURL string `json:"travel_public_url"` // what the browser opens when travel_url is internal
 	InventoryURL    string `json:"inventory_url"`
 	InventoryToken  string `json:"inventory_token"`
 	SetupComplete   bool   `json:"setup_complete"`

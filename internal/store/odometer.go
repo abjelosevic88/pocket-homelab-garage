@@ -105,6 +105,25 @@ func (s *Store) OdometerOn(ctx context.Context, vehicleID int64, date string) fl
 	return reading
 }
 
+// OdometerAt returns the last reading at or before a date together with its date.
+func (s *Store) OdometerAt(ctx context.Context, vehicleID int64, date string) (float64, string) {
+	var reading float64
+	var d string
+	_ = s.DB.QueryRowContext(ctx, `SELECT reading, date FROM (
+		SELECT reading, date FROM odometer WHERE vehicle_id = ?
+		UNION ALL SELECT odometer, date FROM fuel WHERE vehicle_id = ? AND odometer > 0
+		UNION ALL SELECT odometer, date FROM records WHERE vehicle_id = ? AND odometer IS NOT NULL AND odometer > 0
+	) WHERE date <= ? ORDER BY date DESC, reading DESC LIMIT 1`, vehicleID, vehicleID, vehicleID, date).Scan(&reading, &d)
+	return reading, d
+}
+
+// DawarichKmBetween sums recorded driving km in a closed date range.
+func (s *Store) DawarichKmBetween(ctx context.Context, vehicleID int64, from, to string) float64 {
+	var km float64
+	_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(km), 0) FROM dawarich_days WHERE vehicle_id = ? AND date >= ? AND date <= ?`, vehicleID, from, to).Scan(&km)
+	return km
+}
+
 // ---- Dawarich days ----
 
 // PutDawarichDay stores one day's recorded driving distance.

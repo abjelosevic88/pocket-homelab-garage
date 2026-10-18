@@ -25,7 +25,7 @@ Everything is read from environment variables; every value has a default so a ba
 | `FIREFLY_URL` / `FIREFLY_TOKEN` | – | Firefly III base URL and personal access token |
 | `DAWARICH_URL` / `DAWARICH_API_KEY` | – | Dawarich |
 | `NOTIFY_URL` / `NOTIFY_FORMAT` / `NOTIFY_HOUR` | – / guessed / `8` | Apprise `…/notify/<key>`, ntfy topic URL or JSON webhook; `apprise`, `ntfy`, `json`; hour of the daily reminder check |
-| `TRAVEL_URL` / `TRAVEL_TOKEN` | – | Pocket Travel |
+| `TRAVEL_URL` / `TRAVEL_TOKEN` / `TRAVEL_PUBLIC_URL` | – | Pocket Travel (public URL = what the browser opens for trip links) |
 | `INVENTORY_URL` / `INVENTORY_TOKEN` | – | Pocket Inventory |
 | `LUBELOGGER_URL` / `LUBELOGGER_USERNAME` / `LUBELOGGER_PASSWORD` | – | Import everything once on the first start (while the database has no vehicles). `LUBELOGGER_IMPORT_ON_START=false` disables that. |
 | `USER_AGENT` | `PocketGarage/1.0 (…)` | Sent to the exchange-rate providers |

@@ -82,6 +82,8 @@ func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
 			st.TravelURL = v
 		case "travel_token":
 			st.TravelToken = v
+		case "travel_public_url":
+			st.TravelPublicURL = v
 		case "inventory_url":
 			st.InventoryURL = v
 		case "inventory_token":
@@ -118,6 +120,7 @@ func (s *Store) SaveSettings(ctx context.Context, st Settings) error {
 		"notify_digest":     b[st.NotifyDigest],
 		"travel_url":        st.TravelURL,
 		"travel_token":      st.TravelToken,
+		"travel_public_url": st.TravelPublicURL,
 		"inventory_url":     st.InventoryURL,
 		"inventory_token":   st.InventoryToken,
 		"setup_complete":    b[st.SetupComplete],

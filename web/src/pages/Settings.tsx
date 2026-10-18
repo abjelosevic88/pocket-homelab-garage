@@ -141,6 +141,7 @@ function Integrations() {
             <Field label="URL"><input value={f.travel_url} onChange={e => setF({ ...f, travel_url: e.target.value })} placeholder="http://host.docker.internal:8174" disabled={!isAdmin} /></Field>
             <Field label="API token"><input value={f.travel_token} onChange={e => setF({ ...f, travel_token: e.target.value })} disabled={!isAdmin} autoComplete="off" /></Field>
           </div>
+          <Field label="Public URL (optional)" help="What the browser opens for trip links when the URL above is internal (e.g. host.docker.internal)."><input value={f.travel_public_url} onChange={e => setF({ ...f, travel_public_url: e.target.value })} placeholder="https://travel.example.com" disabled={!isAdmin} /></Field>
           <div className="row"><button className="btn sm" onClick={() => run('travel', f.travel_url, f.travel_token)} disabled={!f.travel_url}>Test connection</button>{status('travel')}</div>
         </div>
       </Card>

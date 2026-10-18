@@ -50,7 +50,7 @@ func (s *Server) publicSettings(st store.Settings) map[string]any {
 		"firefly_category": st.FireflyCategory, "firefly_account": st.FireflyAccount, "firefly_auto_sync": st.FireflyAutoSync,
 		"dawarich_url": st.DawarichURL, "dawarich_api_key": mask(st.DawarichAPIKey), "dawarich_configured": st.DawarichURL != "" && st.DawarichAPIKey != "",
 		"notify_url": st.NotifyURL, "notify_format": st.NotifyFormat, "notify_hour": st.NotifyHour, "notify_digest": st.NotifyDigest, "notify_configured": st.NotifyURL != "",
-		"travel_url": st.TravelURL, "travel_token": mask(st.TravelToken), "travel_configured": st.TravelURL != "" && st.TravelToken != "",
+		"travel_url": st.TravelURL, "travel_public_url": st.TravelPublicURL, "travel_token": mask(st.TravelToken), "travel_configured": st.TravelURL != "" && st.TravelToken != "",
 		"inventory_url": st.InventoryURL, "inventory_token": mask(st.InventoryToken), "inventory_configured": st.InventoryURL != "" && st.InventoryToken != "",
 		"max_upload_bytes": s.cfg.MaxUploadBytes, "setup_complete": st.SetupComplete, "base_url": s.cfg.BaseURL,
 	}
@@ -147,6 +147,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		cur.NotifyDigest = in.NotifyDigest
 	}
 	url("travel_url", &cur.TravelURL, in.TravelURL)
+	url("travel_public_url", &cur.TravelPublicURL, in.TravelPublicURL)
 	secret("travel_token", &cur.TravelToken, in.TravelToken)
 	url("inventory_url", &cur.InventoryURL, in.InventoryURL)
 	secret("inventory_token", &cur.InventoryToken, in.InventoryToken)
@@ -183,15 +184,21 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 		}
 		return in.Key
 	}
+	urlOr := func(saved string) string {
+		if strings.TrimSpace(in.URL) == "" {
+			return saved
+		}
+		return in.URL
+	}
 	var msg string
 	var err error
 	switch in.Which {
 	case "firefly":
 		var v string
-		v, err = firefly.New(in.URL, keyOr(st.FireflyToken), 15*time.Second).About(ctx)
+		v, err = firefly.New(urlOr(st.FireflyURL), keyOr(st.FireflyToken), 15*time.Second).About(ctx)
 		msg = "Firefly III " + v
 	case "dawarich":
-		c := dawarich.New(in.URL, keyOr(st.DawarichAPIKey), 15*time.Second)
+		c := dawarich.New(urlOr(st.DawarichURL), keyOr(st.DawarichAPIKey), 15*time.Second)
 		err = c.Health(ctx)
 		if err == nil {
 			var days []dawarich.Day
@@ -203,16 +210,20 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 			msg = fmt.Sprintf("Dawarich reachable, %.0f km driven in the last 7 days", km)
 		}
 	case "notify":
-		n := notify.New(in.URL, in.Format)
+		f := in.Format
+		if f == "" {
+			f = st.NotifyFormat
+		}
+		n := notify.New(urlOr(st.NotifyURL), f)
 		err = n.Send(ctx, notify.Message{Title: "Pocket Garage", Body: "Notifications work. Reminders will arrive here.", Priority: "info", Tags: []string{"wrench"}})
 		msg = "Test message sent via " + n.Format
 	case "travel":
 		var v string
-		v, err = pocket.New(in.URL, keyOr(st.TravelToken), 15*time.Second).Health(ctx)
+		v, err = pocket.New(urlOr(st.TravelURL), keyOr(st.TravelToken), 15*time.Second).Health(ctx)
 		msg = "Pocket Travel " + v
 	case "inventory":
 		var v string
-		v, err = pocket.New(in.URL, keyOr(st.InventoryToken), 15*time.Second).Health(ctx)
+		v, err = pocket.New(urlOr(st.InventoryURL), keyOr(st.InventoryToken), 15*time.Second).Health(ctx)
 		msg = "Pocket Inventory " + v
 	case "lubelogger":
 		var vs []lubelogger.Vehicle
@@ -797,12 +808,13 @@ func (s *Server) syncDawarich(ctx context.Context, v *store.Vehicle) (int, error
 	// the earliest confirmed reading bounds how far back the estimate can matter
 	n := 0
 	to := time.Now()
-	for cur := from; !cur.After(to); cur = cur.AddDate(0, 0, 31) {
-		end := cur.AddDate(0, 0, 31)
+	// Dawarich refuses ranges longer than 31 days; walk in 28-day windows.
+	for cur := from; !cur.After(to); cur = cur.AddDate(0, 0, 28) {
+		end := cur.AddDate(0, 0, 28)
 		if end.After(to) {
 			end = to
 		}
-		days, err := cl.dawarich.Timeline(ctx, cur, end.Add(24*time.Hour-time.Second))
+		days, err := cl.dawarich.Timeline(ctx, cur, end)
 		if err != nil {
 			return n, err
 		}
@@ -914,22 +926,32 @@ func (s *Server) tripsFor(ctx context.Context, cl clients, v *store.Vehicle) []m
 				otherCost += rc.CostHome
 			}
 		}
-		startOdo := s.store.OdometerOn(ctx, v.ID, t.StartDate)
-		endOdo := s.store.OdometerOn(ctx, v.ID, t.EndDate)
-		if endOdo > startOdo && startOdo > 0 {
-			km = endOdo - startOdo
+		km = s.store.DawarichKmBetween(ctx, v.ID, t.StartDate, t.EndDate)
+		if km == 0 {
+			startOdo, startDate := s.store.OdometerAt(ctx, v.ID, t.StartDate)
+			endOdo, endDate := s.store.OdometerAt(ctx, v.ID, addDays(t.EndDate, 3))
+			if startOdo > 0 && endOdo > startOdo && store.DaysBetween(startDate, t.StartDate) <= 3 && endDate >= t.EndDate {
+				km = endOdo - startOdo
+			}
 		}
 		if fills == 0 && otherCost == 0 && km == 0 {
 			continue
 		}
 		link := ""
-		if cl.st.TravelURL != "" {
-			link = fmt.Sprintf("%s/trips/%d", cl.st.TravelURL, t.ID)
+		if base := firstNonEmpty(cl.st.TravelPublicURL, cl.st.TravelURL); base != "" {
+			link = fmt.Sprintf("%s/trips/%d", base, t.ID)
 		}
 		out = append(out, map[string]any{"id": t.ID, "name": t.Name, "destination": t.Destination, "start_date": t.StartDate, "end_date": t.EndDate, "color": t.Color, "fuel_cost": fuelCost, "other_cost": otherCost, "litres": litres, "fills": fills, "km": km, "link": link})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i]["start_date"].(string) > out[j]["start_date"].(string) })
 	return out
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func (s *Server) handleVehicleTrips(w http.ResponseWriter, r *http.Request) {

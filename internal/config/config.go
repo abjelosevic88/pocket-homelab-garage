@@ -51,6 +51,7 @@ type Config struct {
 	NotifyHour      int
 	TravelURL       string
 	TravelToken     string
+	TravelPublicURL string
 	InventoryURL    string
 	InventoryToken  string
 	LubeLoggerURL   string // one-shot import on first start when the database is empty
@@ -148,6 +149,7 @@ func Load() (*Config, error) {
 		NotifyHour:      envInt("NOTIFY_HOUR", 8),
 		TravelURL:       strings.TrimRight(env("TRAVEL_URL", ""), "/"),
 		TravelToken:     env("TRAVEL_TOKEN", ""),
+		TravelPublicURL: strings.TrimRight(env("TRAVEL_PUBLIC_URL", ""), "/"),
 		InventoryURL:    strings.TrimRight(env("INVENTORY_URL", ""), "/"),
 		InventoryToken:  env("INVENTORY_TOKEN", ""),
 		LubeLoggerURL:   strings.TrimRight(env("LUBELOGGER_URL", ""), "/"),
