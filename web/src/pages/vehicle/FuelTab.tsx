@@ -9,6 +9,7 @@ import { Money } from '../../components/Money'
 import { Line } from '../../components/Charts'
 import { FuelModal } from '../../components/forms'
 import { useVehicle } from './ctx'
+import { useMoneyStatus } from '../../components/MoneyBook'
 
 export default function FuelTab() {
   const { vehicle: v, reload: reloadOv, canEdit, overview } = useVehicle()
@@ -25,6 +26,8 @@ export default function FuelTab() {
   const done = () => { setEdit(null); reload(); reloadOv() }
   const series = [...(data || [])].reverse().filter(f => f.economy > 0).map(f => ({ x: fmtDate(f.date, false), y: f.economy, label: `${Math.round(f.distance)} ${v.odometer_unit}` }))
   const prices = [...(data || [])].reverse().filter(f => f.volume > 0).map(f => ({ x: fmtDate(f.date, false), y: f.cost_home / f.volume }))
+  const ms = useMoneyStatus(v.id)
+  const book = async (f: Fuel) => { try { await api.post(`${V1}/vehicles/${v.id}/fuel/${f.id}/money`, {}); toast('Booked in Pocket Money'); reload() } catch (e) { toast((e as Error).message, 'err') } }
   const push = async (f: Fuel) => { try { await api.post(`${V1}/vehicles/${v.id}/fuel/${f.id}/firefly`); toast('Sent to Firefly'); reload() } catch (e) { toast((e as Error).message, 'err') } }
   const ev = v.fuel_type === 'electric'
   return (
@@ -56,15 +59,15 @@ export default function FuelTab() {
                 <td className="num"><Money minor={f.cost} code={f.currency} />{f.currency !== v.currency && <div className="muted small"><Money minor={f.cost_home} code={v.currency} /></div>}</td>
                 <td className="num muted small">{f.volume > 0 ? fmtPricePer(f.price_per, f.currency, currencies.find(c => c.code === f.currency)?.decimals ?? 2, u) : ''}</td>
                 <td className="num">{f.economy > 0 ? fmtEcon(f.economy, u, v.odometer_unit) : <span className="muted">—</span>}</td>
-                <td className="muted">{f.station}{f.grade && <span className="small"> · {f.grade}</span>}{cleanNotes(f.notes) && <div className="small">{cleanNotes(f.notes)}</div>}{f.firefly_id && <span className="tag-src" title={`Firefly journal ${f.firefly_id}`}> · firefly</span>}{f.source !== 'manual' && <span className="tag-src"> · {f.source}</span>}</td>
-                <td className="right" style={{ whiteSpace: 'nowrap' }}>{canEdit && <>{v.role === 'owner' && overview.integrations.firefly && !f.firefly_id && f.cost > 0 && <button className="btn ghost sm" onClick={() => push(f)} title="Create the withdrawal in Firefly III">→ Firefly</button>}<button className="btn ghost sm" onClick={() => setEdit(f)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(f)}>✕</button></>}</td>
+                <td className="muted">{f.station}{f.grade && <span className="small"> · {f.grade}</span>}{cleanNotes(f.notes) && <div className="small">{cleanNotes(f.notes)}</div>}{f.firefly_id && <span className="tag-src" title={`Firefly journal ${f.firefly_id}`}> · firefly</span>}{f.money_tx_id && <span className="tag-src" title="Booked in Pocket Money"> · money</span>}{f.source !== 'manual' && <span className="tag-src"> · {f.source}</span>}</td>
+                <td className="right" style={{ whiteSpace: 'nowrap' }}>{canEdit && <>{ms?.connected && !f.money_tx_id && f.cost > 0 && <button className="btn ghost sm" onClick={() => book(f)} title="Create the transaction in Pocket Money">→ Money</button>}{!ms?.offer && v.role === 'owner' && overview.integrations.firefly && !f.firefly_id && f.cost > 0 && <button className="btn ghost sm" onClick={() => push(f)} title="Create the withdrawal in Firefly III">→ Firefly</button>}<button className="btn ghost sm" onClick={() => setEdit(f)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(f)}>✕</button></>}</td>
               </tr>
             ))}</tbody>
           </table>
         )}
       </Card>
       {edit && <FuelModal vehicle={v} fuel={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} onSaved={done} />}
-      {del && <Confirm title="Delete this fill-up?" message="Economy for the neighbouring fill-ups is recomputed." onCancel={() => setDel(null)} onConfirm={async () => { await api.del(`${V1}/vehicles/${v.id}/fuel/${del.id}`); setDel(null); reload(); reloadOv() }} />}
+      {del && <Confirm title="Delete this fill-up?" message={`Economy for the neighbouring fill-ups is recomputed.${del.money_tx_id ? ' Its Pocket Money transaction is deleted too.' : ''}`} onCancel={() => setDel(null)} onConfirm={async () => { await api.del(`${V1}/vehicles/${v.id}/fuel/${del.id}`); setDel(null); reload(); reloadOv() }} />}
     </>
   )
 }

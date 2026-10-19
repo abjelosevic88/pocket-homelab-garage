@@ -180,6 +180,13 @@ func nullF(f *float64) any {
 	return *f
 }
 
+func nullPos(n int64) any {
+	if n <= 0 {
+		return nil
+	}
+	return n
+}
+
 func nullI(i *int64) any {
 	if i == nil {
 		return nil

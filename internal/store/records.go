@@ -6,12 +6,12 @@ import (
 	"strings"
 )
 
-const recordCols = `id, vehicle_id, kind, category, date, odometer, description, notes, vendor, cost, currency, cost_home, fx_rate, parts, tags, source, external_id, firefly_id, created_by, created_at, updated_at`
+const recordCols = `id, vehicle_id, kind, category, date, odometer, description, notes, vendor, cost, currency, cost_home, fx_rate, parts, tags, source, external_id, firefly_id, created_by, created_at, updated_at, money_tx_id, money_user_id`
 
 func scanRecord(row interface{ Scan(...any) error }) (*Record, error) {
 	var r Record
 	var parts string
-	if err := row.Scan(&r.ID, &r.VehicleID, &r.Kind, &r.Category, &r.Date, &r.Odometer, &r.Description, &r.Notes, &r.Vendor, &r.Cost, &r.Currency, &r.CostHome, &r.FXRate, &parts, &r.Tags, &r.Source, &r.ExternalID, &r.FireflyID, &r.CreatedBy, &r.CreatedAt, &r.UpdatedAt); err != nil {
+	if err := row.Scan(&r.ID, &r.VehicleID, &r.Kind, &r.Category, &r.Date, &r.Odometer, &r.Description, &r.Notes, &r.Vendor, &r.Cost, &r.Currency, &r.CostHome, &r.FXRate, &parts, &r.Tags, &r.Source, &r.ExternalID, &r.FireflyID, &r.CreatedBy, &r.CreatedAt, &r.UpdatedAt, &r.MoneyTxID, &r.MoneyUserID); err != nil {
 		return nil, notFound(err)
 	}
 	r.Parts = []Part{}
@@ -50,6 +50,12 @@ func (s *Store) UpdateRecord(ctx context.Context, r *Record) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE records SET kind=?, category=?, date=?, odometer=?, description=?, notes=?, vendor=?, cost=?, currency=?, cost_home=?, fx_rate=?, parts=?, tags=?, source=?, external_id=?, firefly_id=?, updated_at=? WHERE id=? AND vehicle_id=?`,
 		r.Kind, r.Category, r.Date, nullF(r.Odometer), r.Description, r.Notes, r.Vendor, r.Cost, r.Currency, r.CostHome, r.FXRate, partsJSON(r.Parts), r.Tags, r.Source, r.ExternalID, r.FireflyID, Now(), r.ID, r.VehicleID)
 	return conflict(err)
+}
+
+// SetRecordMoney links (txID > 0) or unlinks a record and its Pocket Money transaction.
+func (s *Store) SetRecordMoney(ctx context.Context, vehicleID, id, txID, userID int64) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE records SET money_tx_id = ?, money_user_id = ? WHERE id = ? AND vehicle_id = ?`, nullPos(txID), nullPos(userID), id, vehicleID)
+	return err
 }
 
 // GetRecord loads one record.

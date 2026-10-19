@@ -11,6 +11,7 @@ export interface Settings {
   notify_url: string; notify_format: string; notify_hour: number; notify_digest: boolean; notify_configured: boolean
   travel_url: string; travel_public_url: string; travel_token: string; travel_configured: boolean
   inventory_url: string; inventory_token: string; inventory_configured: boolean
+  money_enabled: boolean; money_url: string; money_token: string; money_account: number; money_category_fuel: number; money_category: number
   max_upload_bytes: number; setup_complete: boolean; base_url: string
 }
 
@@ -45,12 +46,14 @@ export interface Rec {
   id: number; vehicle_id: number; kind: 'service' | 'repair' | 'upgrade' | 'expense'; category: string; date: string; odometer: number | null
   description: string; notes: string; vendor: string; cost: number; currency: string; cost_home: number; fx_rate: number; parts: Part[]
   tags: string; source: string; external_id: string; firefly_id: string; created_at: string; updated_at: string
+  money_tx_id: number | null; money_error?: string
 }
 
 export interface Fuel {
   id: number; vehicle_id: number; date: string; odometer: number; volume: number; cost: number; currency: string; cost_home: number; fx_rate: number
   full_tank: boolean; missed: boolean; station: string; grade: string; soc_start: number; soc_end: number; lat: number | null; lng: number | null
   notes: string; tags: string; source: string; firefly_id: string; created_at: string
+  money_tx_id: number | null; money_error?: string
   distance: number; economy: number; price_per: number; cost_per_km: number
 }
 
@@ -94,3 +97,9 @@ export const SERIES: Record<string, { light: string; dark: string }> = {
   expense: { light: '#eda100', dark: '#c98500' }, upgrade: { light: '#e87ba4', dark: '#d55181' },
 }
 export const SERIES_ORDER = ['fuel', 'service', 'repair', 'expense', 'upgrade']
+
+/** Pocket Money as seen by the signed-in person (GET /api/v1/money). */
+export interface MoneyStatus {
+  connected: boolean; via: '' | 'core' | 'token'; error: string; enabled: boolean; offer: boolean; core: boolean; url: string
+  accounts: { id: number; name: string; currency: string; kind: string; everyday: boolean }[]; default_account: number
+}

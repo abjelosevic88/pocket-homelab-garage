@@ -163,6 +163,9 @@ type Record struct {
 	CreatedAt   string   `json:"created_at"`
 	UpdatedAt   string   `json:"updated_at"`
 	Documents   int      `json:"documents,omitempty"`
+	MoneyTxID   *int64   `json:"money_tx_id"`
+	MoneyUserID *int64   `json:"money_user_id"`
+	MoneyError  string   `json:"money_error,omitempty"` // set on the response when booking in Pocket Money failed
 }
 
 // Part is one line inside a record: what was fitted or used.
@@ -177,31 +180,34 @@ type Part struct {
 
 // Fuel is one fill-up or charge.
 type Fuel struct {
-	ID         int64    `json:"id"`
-	VehicleID  int64    `json:"vehicle_id"`
-	Date       string   `json:"date"`
-	Odometer   float64  `json:"odometer"`
-	Volume     float64  `json:"volume"`
-	Cost       int64    `json:"cost"`
-	Currency   string   `json:"currency"`
-	CostHome   int64    `json:"cost_home"`
-	FXRate     float64  `json:"fx_rate"`
-	FullTank   bool     `json:"full_tank"`
-	Missed     bool     `json:"missed"`
-	Station    string   `json:"station"`
-	Grade      string   `json:"grade"`
-	SocStart   float64  `json:"soc_start"`
-	SocEnd     float64  `json:"soc_end"`
-	Lat        *float64 `json:"lat"`
-	Lng        *float64 `json:"lng"`
-	Notes      string   `json:"notes"`
-	Tags       string   `json:"tags"`
-	Source     string   `json:"source"`
-	ExternalID string   `json:"external_id"`
-	FireflyID  string   `json:"firefly_id"`
-	CreatedBy  *int64   `json:"created_by"`
-	CreatedAt  string   `json:"created_at"`
-	UpdatedAt  string   `json:"updated_at"`
+	ID          int64    `json:"id"`
+	VehicleID   int64    `json:"vehicle_id"`
+	Date        string   `json:"date"`
+	Odometer    float64  `json:"odometer"`
+	Volume      float64  `json:"volume"`
+	Cost        int64    `json:"cost"`
+	Currency    string   `json:"currency"`
+	CostHome    int64    `json:"cost_home"`
+	FXRate      float64  `json:"fx_rate"`
+	FullTank    bool     `json:"full_tank"`
+	Missed      bool     `json:"missed"`
+	Station     string   `json:"station"`
+	Grade       string   `json:"grade"`
+	SocStart    float64  `json:"soc_start"`
+	SocEnd      float64  `json:"soc_end"`
+	Lat         *float64 `json:"lat"`
+	Lng         *float64 `json:"lng"`
+	Notes       string   `json:"notes"`
+	Tags        string   `json:"tags"`
+	Source      string   `json:"source"`
+	ExternalID  string   `json:"external_id"`
+	FireflyID   string   `json:"firefly_id"`
+	CreatedBy   *int64   `json:"created_by"`
+	CreatedAt   string   `json:"created_at"`
+	UpdatedAt   string   `json:"updated_at"`
+	MoneyTxID   *int64   `json:"money_tx_id"`
+	MoneyUserID *int64   `json:"money_user_id"`
+	MoneyError  string   `json:"money_error,omitempty"`
 
 	// Derived on read (oldest → newest by odometer)
 	Distance  float64 `json:"distance"`    // since the previous fill
@@ -348,7 +354,15 @@ type Settings struct {
 	TravelPublicURL string `json:"travel_public_url"` // what the browser opens when travel_url is internal
 	InventoryURL    string `json:"inventory_url"`
 	InventoryToken  string `json:"inventory_token"`
-	SetupComplete   bool   `json:"setup_complete"`
+	// Pocket Money: through a Pocket Core link, or a Money URL + token without Core.
+	MoneyEnabled      bool   `json:"money_enabled"` // offer "Create a transaction" (ticked) when adding costs
+	MoneyURL          string `json:"money_url"`
+	MoneyToken        string `json:"money_token"`
+	MoneyAccount      int64  `json:"money_account"`          // default account to book on
+	MoneyCategoryFuel int64  `json:"money_category_fuel"`    // category for fill-ups (0 = by name)
+	MoneyCategory     int64  `json:"money_category"`         // category for everything else (0 = by name)
+	MoneyVehicleAccts string `json:"money_vehicle_accounts"` // JSON {vehicle id: account id}, the last account used per vehicle
+	SetupComplete     bool   `json:"setup_complete"`
 }
 
 func itoa(n int) string {

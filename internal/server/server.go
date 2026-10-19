@@ -386,6 +386,7 @@ func (s *Server) Router() http.Handler {
 				r.Put("/records/{id}", s.handleUpdateRecord)
 				r.Delete("/records/{id}", s.handleDeleteRecord)
 				r.Post("/records/{id}/firefly", s.handlePushRecordFirefly)
+				r.Post("/records/{id}/money", s.handleBookRecordMoney)
 
 				r.Get("/fuel", s.handleListFuel)
 				r.Post("/fuel", s.handleCreateFuel)
@@ -393,6 +394,7 @@ func (s *Server) Router() http.Handler {
 				r.Put("/fuel/{id}", s.handleUpdateFuel)
 				r.Delete("/fuel/{id}", s.handleDeleteFuel)
 				r.Post("/fuel/{id}/firefly", s.handlePushFuelFirefly)
+				r.Post("/fuel/{id}/money", s.handleBookFuelMoney)
 
 				r.Get("/odometer", s.handleOdometerHistory)
 				r.Post("/odometer", s.handleCreateOdometer)
@@ -437,6 +439,8 @@ func (s *Server) Router() http.Handler {
 				r.Get("/export/vehicle.json", s.handleExportJSON)
 			})
 
+			r.Get("/money", s.handleMoneyStatus)
+			r.Get("/money/categories", s.handleMoneyCategories)
 			r.Get("/firefly/tags", s.handleFireflyTags)
 			r.Get("/firefly/accounts", s.handleFireflyAccounts)
 			r.Get("/firefly/categories", s.handleFireflyCategories)
@@ -606,6 +610,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		Icon:        "/favicon.svg", Version: Version,
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "GARAGE",
 		Publishes: []string{"garage.fuel_logged", "garage.service_logged", "garage.odometer_updated"},
+		Uses:      []core.Use{{App: "money", Scopes: moneyScopes, Reason: "Book fuel, service, repairs and other car costs as transactions in Pocket Money"}},
 	}
 	if s.cfg.BaseURL != "" {
 		// ask Core for a relying-party client so "Sign in with Pocket Core" needs no configuration

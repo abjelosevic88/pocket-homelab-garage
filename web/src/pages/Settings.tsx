@@ -9,6 +9,7 @@ import { Card, Confirm, Field, Loading, Modal, PageHeader, Segmented, Tabs, useA
 import { Select } from '../components/Select'
 import { CurrencySelect } from '../components/Money'
 import { Avatar } from '../components/people'
+import { useMoneyStatus } from '../components/MoneyBook'
 
 type Tab = 'general' | 'integrations' | 'import' | 'users' | 'profile' | 'api' | 'data' | 'about'
 
@@ -75,6 +76,7 @@ function General() {
           <tr><th>Service & costs</th><td className="muted">Service, repairs, upgrades and plain expenses in one list with a kind, a category and the parts fitted.</td></tr>
           <tr><th>Odometer</th><td className="muted">Every fill-up or record with a reading <i>is</i> the odometer log. Dawarich adds the kilometres driven since.</td></tr>
           <tr><th>Reminders</th><td className="muted">By date, by odometer or both. Recurring ones roll forward when done; logging matching work completes them.</td></tr>
+          <tr><th>Pocket Money</th><td className="muted">Costs you log can become transactions in your Pocket Money (through Pocket Core, or a token). Edits and deletes follow them.</td></tr>
           <tr><th>Firefly</th><td className="muted">Tagged withdrawals link to what you logged; the rest become expenses. Rows can be pushed back as withdrawals.</td></tr>
           <tr><th>Phone & Raycast</th><td className="muted">The LubeLogger-shaped API lives at <code>/api/…</code>, so the Pocket Homelab app and the Raycast extension only need the new URL.</td></tr>
         </tbody></table>
@@ -100,6 +102,7 @@ function Integrations() {
   const notifyRun = async () => { try { const r = await api.post<{ sent: number }>(`${V1}/notify/run?force=1`); toast(`${r.sent} message${r.sent === 1 ? '' : 's'} sent`) } catch (e) { toast((e as Error).message, 'err') } }
   return (
     <div className="grid" style={{ gap: 16 }}>
+      <PocketMoneyCard f={f} setF={setF} run={run} status={status} />
       <Card title="💶 Firefly III" actions={badge(f.firefly_configured)}>
         <p className="muted small">What the car really costs. Tag the vehicle's withdrawals in Firefly (e.g. <code>skoda</code>) and set that tag on the vehicle. Rows matching a fill-up or record by date and amount are linked; the rest come in as expenses. Synced every 30 minutes and on demand.</p>
         <div className="grid" style={{ gap: 12 }}>
@@ -158,6 +161,37 @@ function Integrations() {
       </Card>
       <div><button className="btn primary" onClick={() => save()} disabled={busy}>Save integrations</button></div>
     </div>
+  )
+}
+
+function PocketMoneyCard({ f, setF, run, status }: { f: SettingsT; setF: (s: SettingsT) => void; run: (which: string, url: string, key: string) => void; status: (which: string) => React.ReactNode }) {
+  const ms = useMoneyStatus()
+  const [cats, setCats] = useState<{ id: number; full_name: string; name: string }[]>([])
+  const acct = f.money_account || ms?.default_account || 0
+  useEffect(() => { if (ms?.connected) api.get<typeof cats>(`${V1}/money/categories${acct ? `?account=${acct}` : ''}`).then(setCats).catch(() => setCats([])) }, [ms?.connected, acct])
+  const badge = !ms ? null : ms.connected ? <span className="badge cat">{ms.via === 'core' ? 'connected through Pocket Core' : 'connected with a token'}</span> : <span className="badge">not connected</span>
+  const catOpts = cats.map(c => ({ value: String(c.id), label: c.full_name || c.name }))
+  return (
+    <Card title="👛 Pocket Money" actions={badge}>
+      <p className="muted small">Every fill-up, service, repair or expense you log can become an expense in your Pocket Money, with the vehicle's tag, a link back here and the cost in its own currency. Edits and deletes here follow it there. {ms?.core ? <>On this box it goes through <b>Pocket Core</b>: no token is needed, and you can switch the link off for yourself in Pocket Core (Settings → Apps acting for me).</> : <>Without Pocket Core, give it your Money URL and a token from Pocket Money → Settings → API tokens.</>}</p>
+      {ms && !ms.connected && ms.error && <div className="callout mb small">{ms.error}</div>}
+      <div className="grid" style={{ gap: 12 }}>
+        <label className="row"><input type="checkbox" checked={f.money_enabled} onChange={e => setF({ ...f, money_enabled: e.target.checked })} style={{ width: 'auto' }} /> Offer “Create a transaction in Pocket Money” when adding a cost, ticked by default</label>
+        {ms?.connected && <div className="three-col tight">
+          <Field label="Book on" help="Each vehicle remembers the last account you picked on its forms."><Select value={String(f.money_account || '')} onChange={a => setF({ ...f, money_account: Number(a) || 0 })} options={ms.accounts.map(a => ({ value: String(a.id), label: a.name, hint: a.currency }))} placeholder={ms.accounts.find(a => a.id === ms.default_account)?.name || 'Choose…'} clearLabel="Everyday account" /></Field>
+          <Field label="Category for fuel" help="Empty: a category named like gorivo / fuel."><Select value={String(f.money_category_fuel || '')} onChange={c => setF({ ...f, money_category_fuel: Number(c) || 0 })} options={catOpts} placeholder="By name" clearLabel="By name" /></Field>
+          <Field label="Category for everything else" help="Empty: a category named like auto / car."><Select value={String(f.money_category || '')} onChange={c => setF({ ...f, money_category: Number(c) || 0 })} options={catOpts} placeholder="By name" clearLabel="By name" /></Field>
+        </div>}
+        <details>
+          <summary className="small">{ms?.core ? 'Use a Money token instead of Pocket Core' : 'Money URL and token'}</summary>
+          <div className="two-col tight mt-sm">
+            <Field label="URL" help={ms?.core ? 'Empty: found through Pocket Core.' : 'Inside Docker use http://host.docker.internal:PORT.'}><input value={f.money_url} onChange={e => setF({ ...f, money_url: e.target.value })} placeholder="http://host.docker.internal:8178" /></Field>
+            <Field label="API token" help="A token wins over Pocket Core. Clear it to go back."><input value={f.money_token} onChange={e => setF({ ...f, money_token: e.target.value })} autoComplete="off" placeholder="pm_…" /></Field>
+          </div>
+        </details>
+        <div className="row"><button className="btn sm" onClick={() => run('money', f.money_url, f.money_token)}>Test connection</button>{status('money')}</div>
+      </div>
+    </Card>
   )
 }
 

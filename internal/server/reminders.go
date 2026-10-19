@@ -275,6 +275,7 @@ func (s *Server) handleReminderDone(w http.ResponseWriter, r *http.Request) {
 		Currency  string   `json:"currency"`
 		Vendor    string   `json:"vendor"`
 		Notes     string   `json:"notes"`
+		moneyChoice
 	}
 	_ = decode(r, &in)
 	if in.Date == "" {
@@ -301,6 +302,7 @@ func (s *Server) handleReminderDone(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.store.LogActivity(r.Context(), v.ID, uid, "added "+rec.Kind, rec.Description)
+		s.bookRecord(r.Context(), userFrom(r.Context()), v, rec, in.moneyChoice)
 	}
 	store.RollForward(rm, in.Date, in.Odometer)
 	if err := s.store.UpdateReminder(r.Context(), rm); err != nil {
@@ -519,6 +521,7 @@ func (s *Server) handlePlanDone(w http.ResponseWriter, r *http.Request) {
 		Currency string   `json:"currency"`
 		Vendor   string   `json:"vendor"`
 		Notes    string   `json:"notes"`
+		moneyChoice
 	}
 	_ = decode(r, &in)
 	if in.Date == "" {
@@ -549,6 +552,7 @@ func (s *Server) handlePlanDone(w http.ResponseWriter, r *http.Request) {
 	_ = s.store.UpdatePlan(r.Context(), p)
 	s.store.LogActivity(r.Context(), v.ID, uid, "completed plan", p.Title)
 	s.afterRecordChange(r.Context(), v, rec)
+	s.bookRecord(r.Context(), userFrom(r.Context()), v, rec, in.moneyChoice)
 	writeJSON(w, http.StatusOK, map[string]any{"plan": p, "record": rec})
 }
 

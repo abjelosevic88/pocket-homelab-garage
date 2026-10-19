@@ -21,6 +21,7 @@ import (
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/export"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/firefly"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/lubelogger"
+	"github.com/abjelosevic88/pocket-homelab-garage/internal/money"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/notify"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/pocket"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/store"
@@ -52,6 +53,8 @@ func (s *Server) publicSettings(st store.Settings) map[string]any {
 		"notify_url": st.NotifyURL, "notify_format": st.NotifyFormat, "notify_hour": st.NotifyHour, "notify_digest": st.NotifyDigest, "notify_configured": st.NotifyURL != "",
 		"travel_url": st.TravelURL, "travel_public_url": st.TravelPublicURL, "travel_token": mask(st.TravelToken), "travel_configured": st.TravelURL != "" && st.TravelToken != "",
 		"inventory_url": st.InventoryURL, "inventory_token": mask(st.InventoryToken), "inventory_configured": st.InventoryURL != "" && st.InventoryToken != "",
+		"money_enabled": st.MoneyEnabled, "money_url": st.MoneyURL, "money_token": mask(st.MoneyToken), "money_account": st.MoneyAccount,
+		"money_category_fuel": st.MoneyCategoryFuel, "money_category": st.MoneyCategory,
 		"max_upload_bytes": s.cfg.MaxUploadBytes, "setup_complete": st.SetupComplete, "base_url": s.cfg.BaseURL,
 	}
 }
@@ -148,6 +151,20 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	secret("travel_token", &cur.TravelToken, in.TravelToken)
 	url("inventory_url", &cur.InventoryURL, in.InventoryURL)
 	secret("inventory_token", &cur.InventoryToken, in.InventoryToken)
+	if keys["money_enabled"] {
+		cur.MoneyEnabled = in.MoneyEnabled
+	}
+	url("money_url", &cur.MoneyURL, in.MoneyURL)
+	secret("money_token", &cur.MoneyToken, in.MoneyToken)
+	if keys["money_account"] && in.MoneyAccount >= 0 {
+		cur.MoneyAccount = in.MoneyAccount
+	}
+	if keys["money_category_fuel"] && in.MoneyCategoryFuel >= 0 {
+		cur.MoneyCategoryFuel = in.MoneyCategoryFuel
+	}
+	if keys["money_category"] && in.MoneyCategory >= 0 {
+		cur.MoneyCategory = in.MoneyCategory
+	}
 	if admin && (keys["title"] || keys["fx_auto"]) {
 		if err := s.store.SaveSettings(r.Context(), cur); err != nil {
 			s.fail(w, err, "save settings")
@@ -227,6 +244,22 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 		var v string
 		v, err = pocket.New(urlOr(st.InventoryURL), keyOr(st.InventoryToken), 15*time.Second).Health(ctx)
 		msg = "Pocket Inventory " + v
+	case "money":
+		var accts []money.Account
+		if tok := keyOr(st.MoneyToken); tok != "" {
+			base := urlOr(st.MoneyURL)
+			if base == "" {
+				base = s.resolveSibling(ctx, "money")
+			}
+			accts, err = money.New(base, tok, 15*time.Second).Accounts(ctx)
+			msg = fmt.Sprintf("Pocket Money reachable with your token, %d accounts to book on", len(accts))
+		} else {
+			var ml *moneyLink
+			if ml, err = s.moneyFor(ctx, userFrom(r.Context())); err == nil {
+				accts, err = ml.client.Accounts(ctx)
+				msg = fmt.Sprintf("Connected through Pocket Core, %d accounts to book on", len(accts))
+			}
+		}
 	case "lubelogger":
 		var vs []lubelogger.Vehicle
 		vs, err = lubelogger.New(in.URL, in.Username, in.Password, 15*time.Second).Vehicles(ctx)

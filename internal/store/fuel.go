@@ -5,12 +5,12 @@ import (
 	"sort"
 )
 
-const fuelCols = `id, vehicle_id, date, odometer, volume, cost, currency, cost_home, fx_rate, full_tank, missed, station, grade, soc_start, soc_end, lat, lng, notes, tags, source, external_id, firefly_id, created_by, created_at, updated_at`
+const fuelCols = `id, vehicle_id, date, odometer, volume, cost, currency, cost_home, fx_rate, full_tank, missed, station, grade, soc_start, soc_end, lat, lng, notes, tags, source, external_id, firefly_id, created_by, created_at, updated_at, money_tx_id, money_user_id`
 
 func scanFuel(row interface{ Scan(...any) error }) (*Fuel, error) {
 	var f Fuel
 	var full, missed int
-	if err := row.Scan(&f.ID, &f.VehicleID, &f.Date, &f.Odometer, &f.Volume, &f.Cost, &f.Currency, &f.CostHome, &f.FXRate, &full, &missed, &f.Station, &f.Grade, &f.SocStart, &f.SocEnd, &f.Lat, &f.Lng, &f.Notes, &f.Tags, &f.Source, &f.ExternalID, &f.FireflyID, &f.CreatedBy, &f.CreatedAt, &f.UpdatedAt); err != nil {
+	if err := row.Scan(&f.ID, &f.VehicleID, &f.Date, &f.Odometer, &f.Volume, &f.Cost, &f.Currency, &f.CostHome, &f.FXRate, &full, &missed, &f.Station, &f.Grade, &f.SocStart, &f.SocEnd, &f.Lat, &f.Lng, &f.Notes, &f.Tags, &f.Source, &f.ExternalID, &f.FireflyID, &f.CreatedBy, &f.CreatedAt, &f.UpdatedAt, &f.MoneyTxID, &f.MoneyUserID); err != nil {
 		return nil, notFound(err)
 	}
 	f.FullTank = full == 1
@@ -41,6 +41,12 @@ func (s *Store) UpdateFuel(ctx context.Context, f *Fuel) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE fuel SET date=?, odometer=?, volume=?, cost=?, currency=?, cost_home=?, fx_rate=?, full_tank=?, missed=?, station=?, grade=?, soc_start=?, soc_end=?, lat=?, lng=?, notes=?, tags=?, source=?, external_id=?, firefly_id=?, updated_at=? WHERE id=? AND vehicle_id=?`,
 		f.Date, f.Odometer, f.Volume, f.Cost, f.Currency, f.CostHome, f.FXRate, boolInt(f.FullTank), boolInt(f.Missed), f.Station, f.Grade, f.SocStart, f.SocEnd, nullF(f.Lat), nullF(f.Lng), f.Notes, f.Tags, f.Source, f.ExternalID, f.FireflyID, Now(), f.ID, f.VehicleID)
 	return conflict(err)
+}
+
+// SetFuelMoney links (txID > 0) or unlinks a fill-up and its Pocket Money transaction.
+func (s *Store) SetFuelMoney(ctx context.Context, vehicleID, id, txID, userID int64) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE fuel SET money_tx_id = ?, money_user_id = ? WHERE id = ? AND vehicle_id = ?`, nullPos(txID), nullPos(userID), id, vehicleID)
+	return err
 }
 
 // GetFuel loads one fill-up (without derived stretch figures).

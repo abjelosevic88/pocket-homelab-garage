@@ -10,6 +10,7 @@ import { Select } from '../components/Select'
 import { AmountInput } from '../components/Money'
 import { Logo } from '../components/Layout'
 import { OdometerModal, RecordModal } from '../components/forms'
+import { MoneyBook, moneyBody, moneyWarning, useMoneyStatus, type MoneyChoice } from '../components/MoneyBook'
 
 type Kind = 'fuel' | 'service' | 'expense' | 'odometer'
 
@@ -29,6 +30,9 @@ export default function Quick() {
   const [f, setF] = useState({ odometer: 0, volume: 0, cost: null as number | null, currency: '', full_tank: true, station: '' })
   const [busy, setBusy] = useState(false)
   const [last, setLast] = useState<Fuel | null>(null)
+  const ms = useMoneyStatus(vehicle?.id)
+  const [mc, setMc] = useState<MoneyChoice | null>(null)
+  useEffect(() => { setMc(null) }, [vehicle?.id])
   useEffect(() => { if (vehicle) setF(x => ({ ...x, odometer: x.odometer || Math.round(vehicle.summary?.odometer_estimate || 0), currency: x.currency || vehicle.currency, station: x.station || vehicle.summary?.last_fuel?.station || '' })) }, [vehicle])
   if (!settings) return <Loading />
   if (active.length === 0) return <div className="quick"><p className="muted">Add a vehicle first.</p><Link className="btn" to="/vehicles">Vehicles</Link></div>
@@ -38,8 +42,8 @@ export default function Quick() {
   const submitFuel = async (e: React.FormEvent) => {
     e.preventDefault(); if (!vehicle) return; setBusy(true)
     try {
-      const r = await api.post<Fuel>(`${V1}/vehicles/${vehicle.id}/fuel`, { date: todayISO(), odometer: f.odometer, volume: fromVol(f.volume, u), cost: f.cost || 0, currency: f.currency, full_tank: f.full_tank, station: f.station })
-      setLast(r); toast('Fill-up logged'); setF(x => ({ ...x, volume: 0, cost: null }))
+      const r = await api.post<Fuel>(`${V1}/vehicles/${vehicle.id}/fuel`, { date: todayISO(), odometer: f.odometer, volume: fromVol(f.volume, u), cost: f.cost || 0, currency: f.currency, full_tank: f.full_tank, station: f.station, ...moneyBody(mc) })
+      setLast(r); toast('Fill-up logged'); moneyWarning(r, toast); setF(x => ({ ...x, volume: 0, cost: null }))
       api.get<Vehicle>(`${V1}/vehicles/${vehicle.id}`).then(setVehicle)
     } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
@@ -63,8 +67,9 @@ export default function Quick() {
             <Field label="Station"><input value={f.station} onChange={e => setF({ ...f, station: e.target.value })} /></Field>
             <Field group label="Tank"><label className="row" style={{ paddingTop: 8 }}><input type="checkbox" checked={f.full_tank} onChange={e => setF({ ...f, full_tank: e.target.checked })} style={{ width: 'auto' }} /> filled to full</label></Field>
           </div>
+          <MoneyBook status={ms} value={mc} onChange={setMc} hasCost={!!f.cost} />
           <button className="btn primary lg" disabled={busy}>{busy ? 'Saving…' : 'Log fill-up'}</button>
-          {last && <div className="callout success">Logged {last.volume.toFixed(2)} L{last.distance > 0 && <> · {Math.round(last.distance)} {vehicle.odometer_unit} since the last one</>}{last.economy > 0 && <> · {last.economy.toFixed(2)} L/100</>}. <Link to={`/vehicles/${vehicle.id}/fuel`}>See the list</Link></div>}
+          {last && <div className="callout success">Logged {last.volume.toFixed(2)} L{last.distance > 0 && <> · {Math.round(last.distance)} {vehicle.odometer_unit} since the last one</>}{last.economy > 0 && <> · {last.economy.toFixed(2)} L/100</>}{last.money_tx_id && <> · booked in Pocket Money</>}. <Link to={`/vehicles/${vehicle.id}/fuel`}>See the list</Link></div>}
         </form>
       ) : kind === 'odometer' ? (
         <OdometerModal vehicle={vehicle} onClose={() => navigate(`/vehicles/${vehicle.id}/odometer`)} onSaved={() => navigate(`/vehicles/${vehicle.id}/odometer`)} />

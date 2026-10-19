@@ -7,6 +7,7 @@ import { KIND_LABEL, STAGE_LABEL, type Fuel, type Note, type OdometerReading, ty
 import { Field, Modal, Segmented, useToast } from './ui'
 import { Select } from './Select'
 import { AmountInput, CurrencySelect, MoneyInput } from './Money'
+import { MoneyBook, MoneyLinked, moneyBody, moneyWarning, useMoneyStatus, type MoneyChoice } from './MoneyBook'
 
 const cap = (s: string) => s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, ' ') : ''
 
@@ -93,14 +94,16 @@ export function FuelModal({ vehicle, fuel, onClose, onSaved }: { vehicle: Vehicl
     soc_start: fuel?.soc_start || 0, soc_end: fuel?.soc_end || 0,
   })
   const [busy, setBusy] = useState(false)
+  const ms = useMoneyStatus(vehicle.id)
+  const [mc, setMc] = useState<MoneyChoice | null>(null)
   const set = (k: string, v: unknown) => setF(x => ({ ...x, [k]: v }))
   const dec = decimalsOf(f.currency, currencies)
   const pricePer = f.volume > 0 && f.cost ? (f.cost / Math.pow(10, dec)) / f.volume : 0
   const ev = vehicle.fuel_type === 'electric'
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true)
-    const body = { ...f, volume: fromVol(f.volume, u), cost: f.cost || 0 }
-    try { const r = fuel ? await api.put<Fuel>(`${V1}/vehicles/${vehicle.id}/fuel/${fuel.id}`, body) : await api.post<Fuel>(`${V1}/vehicles/${vehicle.id}/fuel`, body); toast(fuel ? 'Fill-up saved' : 'Fill-up logged'); onSaved(r) } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+    const body = { ...f, volume: fromVol(f.volume, u), cost: f.cost || 0, ...moneyBody(fuel?.money_tx_id ? null : mc) }
+    try { const r = fuel ? await api.put<Fuel>(`${V1}/vehicles/${vehicle.id}/fuel/${fuel.id}`, body) : await api.post<Fuel>(`${V1}/vehicles/${vehicle.id}/fuel`, body); toast(fuel ? 'Fill-up saved' : 'Fill-up logged'); moneyWarning(r, toast); onSaved(r) } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
   return (
     <Modal title={fuel ? 'Edit fill-up' : ev ? 'Log a charge' : 'Log a fill-up'} onClose={onClose}>
@@ -126,6 +129,7 @@ export function FuelModal({ vehicle, fuel, onClose, onSaved }: { vehicle: Vehicl
           <Field label="SoC end %"><input type="number" value={f.soc_end || ''} onChange={e => set('soc_end', Number(e.target.value))} /></Field>
         </div>}
         <Field label="Notes"><input value={f.notes} onChange={e => set('notes', e.target.value)} /></Field>
+        {fuel?.money_tx_id ? <MoneyLinked status={ms} /> : <MoneyBook status={ms} value={mc} onChange={setMc} hasCost={!!f.cost} initial={!fuel} />}
         <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>{fuel ? 'Save' : 'Log it'}</button></div>
       </form>
     </Modal>
@@ -144,6 +148,8 @@ export function RecordModal({ vehicle, record, kind = 'service', onClose, onSave
     parts: (record?.parts || []) as Part[],
   })
   const [busy, setBusy] = useState(false)
+  const ms = useMoneyStatus(vehicle.id)
+  const [mc, setMc] = useState<MoneyChoice | null>(null)
   const [inv, setInv] = useState<{ items: { id: number; name: string; quantity: number; unit: string }[]; url: string } | null>(null)
   const [invQ, setInvQ] = useState('')
   const set = (k: string, v: unknown) => setF(x => ({ ...x, [k]: v }))
@@ -157,8 +163,8 @@ export function RecordModal({ vehicle, record, kind = 'service', onClose, onSave
   }, [invQ, settings?.inventory_configured])
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true)
-    const body = { ...f, cost: f.cost || 0, odometer: f.kind === 'expense' ? null : f.odometer || null, parts: f.parts.filter(p => p.name.trim()) }
-    try { const r = record ? await api.put<Rec>(`${V1}/vehicles/${vehicle.id}/records/${record.id}`, body) : await api.post<Rec>(`${V1}/vehicles/${vehicle.id}/records`, body); toast(record ? 'Saved' : `${KIND_LABEL[r.kind]} logged`); onSaved(r) } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+    const body = { ...f, cost: f.cost || 0, odometer: f.kind === 'expense' ? null : f.odometer || null, parts: f.parts.filter(p => p.name.trim()), ...moneyBody(record?.money_tx_id ? null : mc) }
+    try { const r = record ? await api.put<Rec>(`${V1}/vehicles/${vehicle.id}/records/${record.id}`, body) : await api.post<Rec>(`${V1}/vehicles/${vehicle.id}/records`, body); toast(record ? 'Saved' : `${KIND_LABEL[r.kind]} logged`); moneyWarning(r, toast); onSaved(r) } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
   const setPart = (i: number, patch: Partial<Part>) => set('parts', f.parts.map((p, j) => j === i ? { ...p, ...patch } : p))
   return (
@@ -194,6 +200,7 @@ export function RecordModal({ vehicle, record, kind = 'service', onClose, onSave
           <Field label="Notes"><textarea rows={2} value={f.notes} onChange={e => set('notes', e.target.value)} /></Field>
           <Field label="Tags"><input value={f.tags} onChange={e => set('tags', e.target.value)} placeholder="warranty diy" /></Field>
         </div>
+        {record?.money_tx_id ? <MoneyLinked status={ms} /> : <MoneyBook status={ms} value={mc} onChange={setMc} hasCost={!!f.cost} initial={!record} />}
         <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>{record ? 'Save' : 'Log it'}</button></div>
       </form>
     </Modal>
@@ -279,9 +286,11 @@ export function DoneModal({ vehicle, reminder, onClose, onDone }: { vehicle: Veh
   const { toast } = useToast()
   const [f, setF] = useState({ date: todayISO(), odometer: vehicle.summary ? Math.round(vehicle.summary.odometer_estimate) : 0, log_record: reminder.kind !== 'none', cost: null as number | null, currency: vehicle.currency, vendor: '', notes: '' })
   const [busy, setBusy] = useState(false)
+  const ms = useMoneyStatus(vehicle.id)
+  const [mc, setMc] = useState<MoneyChoice | null>(null)
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { await api.post(`${V1}/vehicles/${vehicle.id}/reminders/${reminder.id}/done`, { ...f, cost: f.cost || 0, odometer: f.odometer || null }); toast(reminder.interval_days || reminder.interval_km ? 'Done — rolled forward' : 'Done'); onDone() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+    try { const r = await api.post<{ record: Rec | null }>(`${V1}/vehicles/${vehicle.id}/reminders/${reminder.id}/done`, { ...f, cost: f.cost || 0, odometer: f.odometer || null, ...moneyBody(mc) }); toast(reminder.interval_days || reminder.interval_km ? 'Done — rolled forward' : 'Done'); if (r.record) moneyWarning(r.record, toast); onDone() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
   return (
     <Modal title={`Done: ${reminder.title}`} onClose={onClose}>
@@ -297,6 +306,7 @@ export function DoneModal({ vehicle, reminder, onClose, onDone }: { vehicle: Veh
             <Field label="Workshop"><input value={f.vendor} onChange={e => setF({ ...f, vendor: e.target.value })} /></Field>
           </div>
           <Field label="Notes"><input value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></Field>
+          <MoneyBook status={ms} value={mc} onChange={setMc} hasCost={!!f.cost} />
         </>}
         {(reminder.interval_days > 0 || reminder.interval_km > 0) && <p className="muted small">Recurring: the next due point is set from this date and odometer.</p>}
         <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>Mark done</button></div>
@@ -344,9 +354,11 @@ export function PlanDoneModal({ vehicle, plan, onClose, onDone }: { vehicle: Veh
   const { toast } = useToast()
   const [f, setF] = useState({ date: todayISO(), odometer: vehicle.summary ? Math.round(vehicle.summary.odometer_estimate) : 0, cost: plan.estimate || null as number | null, currency: vehicle.currency, vendor: '', notes: '' })
   const [busy, setBusy] = useState(false)
+  const ms = useMoneyStatus(vehicle.id)
+  const [mc, setMc] = useState<MoneyChoice | null>(null)
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { await api.post(`${V1}/vehicles/${vehicle.id}/plans/${plan.id}/done`, { ...f, cost: f.cost || 0, odometer: f.odometer || null }); toast('Logged and moved to done'); onDone() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+    try { const r = await api.post<{ record: Rec }>(`${V1}/vehicles/${vehicle.id}/plans/${plan.id}/done`, { ...f, cost: f.cost || 0, odometer: f.odometer || null, ...moneyBody(mc) }); toast('Logged and moved to done'); moneyWarning(r.record, toast); onDone() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
   return (
     <Modal title={`Done: ${plan.title}`} onClose={onClose}>
@@ -361,6 +373,7 @@ export function PlanDoneModal({ vehicle, plan, onClose, onDone }: { vehicle: Veh
           <Field label="Workshop"><input value={f.vendor} onChange={e => setF({ ...f, vendor: e.target.value })} /></Field>
         </div>
         <Field label="Notes"><input value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></Field>
+        <MoneyBook status={ms} value={mc} onChange={setMc} hasCost={!!f.cost} />
         <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>Log & finish</button></div>
       </form>
     </Modal>

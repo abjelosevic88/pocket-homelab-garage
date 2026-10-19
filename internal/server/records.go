@@ -25,6 +25,7 @@ type recordInput struct {
 	FXRate      *float64     `json:"fx_rate"`
 	Parts       []store.Part `json:"parts"`
 	Tags        *string      `json:"tags"`
+	moneyChoice
 }
 
 func (s *Server) applyRecord(ctx context.Context, v *store.Vehicle, rec *store.Record, in recordInput, keys map[string]bool) string {
@@ -128,6 +129,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.LogActivity(r.Context(), v.ID, uid, "added "+rec.Kind, rec.Description)
 	s.afterRecordChange(r.Context(), v, rec)
+	s.bookRecord(r.Context(), userFrom(r.Context()), v, rec, in.moneyChoice)
 	s.publish(r.Context(), v.OwnerID, "garage.service_logged", fmt.Sprintf("record:%d", rec.ID), map[string]any{
 		"record_id": rec.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "kind": rec.Kind, "category": rec.Category,
 		"description": rec.Description, "date": rec.Date, "odometer": rec.Odometer, "cost": rec.Cost, "currency": rec.Currency,
@@ -202,6 +204,14 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.store.LogActivity(r.Context(), v.ID, userFrom(r.Context()).ID, "updated "+rec.Kind, rec.Description)
+	if rec.MoneyTxID != nil && moneyFieldsChanged(keys) {
+		rec.MoneyError = s.resyncMoney(r.Context(), rec.MoneyTxID, rec.MoneyUserID, recordMoneyTx(s, v, rec), func() {
+			_ = s.store.SetRecordMoney(r.Context(), v.ID, rec.ID, 0, 0)
+			rec.MoneyTxID, rec.MoneyUserID = nil, nil
+		})
+	} else if in.Money != nil && *in.Money {
+		s.bookRecord(r.Context(), userFrom(r.Context()), v, rec, in.moneyChoice)
+	}
 	writeJSON(w, http.StatusOK, rec)
 }
 
@@ -220,7 +230,14 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.store.LogActivity(r.Context(), v.ID, userFrom(r.Context()).ID, "deleted "+rec.Kind, rec.Description)
+	s.unbookMoney(r.Context(), v.ID, rec.MoneyTxID, rec.MoneyUserID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// moneyFieldsChanged reports whether an edit touched what the Pocket Money
+// transaction mirrors.
+func moneyFieldsChanged(keys map[string]bool) bool {
+	return keys["cost"] || keys["currency"] || keys["date"] || keys["description"] || keys["vendor"]
 }
 
 // ---- fuel ----
@@ -244,6 +261,7 @@ type fuelInput struct {
 	Tags     *string  `json:"tags"`
 	// convenience: price per unit instead of total cost
 	PricePer *float64 `json:"price_per"`
+	moneyChoice
 }
 
 func (s *Server) applyFuel(ctx context.Context, v *store.Vehicle, f *store.Fuel, in fuelInput, keys map[string]bool) string {
@@ -368,7 +386,10 @@ func (s *Server) handleCreateFuel(w http.ResponseWriter, r *http.Request) {
 		"fuel_id": f.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "date": f.Date, "station": f.Station,
 		"odometer": f.Odometer, "volume": f.Volume, "cost": f.Cost, "currency": f.Currency, "full_tank": f.FullTank,
 	})
-	writeJSON(w, http.StatusCreated, s.fuelWithStats(r.Context(), v.ID, f.ID))
+	msg := s.bookFuel(r.Context(), userFrom(r.Context()), v, f, in.moneyChoice)
+	out := s.fuelWithStats(r.Context(), v.ID, f.ID)
+	out.MoneyError = msg
+	writeJSON(w, http.StatusCreated, out)
 }
 
 // fuelWithStats re-reads one fill with its derived stretch figures.
@@ -418,7 +439,15 @@ func (s *Server) handleUpdateFuel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.store.LogActivity(r.Context(), v.ID, userFrom(r.Context()).ID, "updated fill-up", f.Station)
-	writeJSON(w, http.StatusOK, s.fuelWithStats(r.Context(), v.ID, f.ID))
+	msg := ""
+	if f.MoneyTxID != nil && (moneyFieldsChanged(keys) || keys["station"] || keys["volume"] || keys["price_per"]) {
+		msg = s.resyncMoney(r.Context(), f.MoneyTxID, f.MoneyUserID, fuelMoneyTx(s, v, f), func() { _ = s.store.SetFuelMoney(r.Context(), v.ID, f.ID, 0, 0) })
+	} else if in.Money != nil && *in.Money {
+		msg = s.bookFuel(r.Context(), userFrom(r.Context()), v, f, in.moneyChoice)
+	}
+	out := s.fuelWithStats(r.Context(), v.ID, f.ID)
+	out.MoneyError = msg
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleDeleteFuel(w http.ResponseWriter, r *http.Request) {
@@ -426,11 +455,17 @@ func (s *Server) handleDeleteFuel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v := vehicleFrom(r.Context()).vehicle
-	if err := s.store.DeleteFuel(r.Context(), v.ID, idParam(r, "id")); err != nil {
+	f, err := s.store.GetFuel(r.Context(), v.ID, idParam(r, "id"))
+	if err != nil {
+		s.fail(w, err, "fuel")
+		return
+	}
+	if err := s.store.DeleteFuel(r.Context(), v.ID, f.ID); err != nil {
 		s.fail(w, err, "delete fuel")
 		return
 	}
 	s.store.LogActivity(r.Context(), v.ID, userFrom(r.Context()).ID, "deleted fill-up", "")
+	s.unbookMoney(r.Context(), v.ID, f.MoneyTxID, f.MoneyUserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

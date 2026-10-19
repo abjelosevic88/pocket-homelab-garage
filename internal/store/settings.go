@@ -17,11 +17,12 @@ var GlobalKeys = []string{"title", "fx_auto", "setup_complete"}
 var PersonalKeys = []string{"home_currency", "date_format", "time_format", "distance_unit", "volume_unit", "economy_unit",
 	"firefly_url", "firefly_token", "firefly_category", "firefly_account", "firefly_auto_sync",
 	"dawarich_url", "dawarich_api_key", "notify_url", "notify_format", "notify_hour", "notify_digest",
-	"travel_url", "travel_token", "travel_public_url", "inventory_url", "inventory_token"}
+	"travel_url", "travel_token", "travel_public_url", "inventory_url", "inventory_token",
+	"money_enabled", "money_url", "money_token", "money_account", "money_category_fuel", "money_category", "money_vehicle_accounts"}
 
 // DefaultSettings returns the built-in defaults.
 func DefaultSettings() Settings {
-	return Settings{Title: DefaultTitle, HomeCurrency: "EUR", DateFormat: "auto", TimeFormat: "auto", DistanceUnit: "km", VolumeUnit: "l", EconomyUnit: "l100", FXAuto: true, FireflyAutoSync: true, NotifyFormat: "apprise", NotifyHour: 8, NotifyDigest: true}
+	return Settings{Title: DefaultTitle, HomeCurrency: "EUR", DateFormat: "auto", TimeFormat: "auto", DistanceUnit: "km", VolumeUnit: "l", EconomyUnit: "l100", FXAuto: true, FireflyAutoSync: true, NotifyFormat: "apprise", NotifyHour: 8, NotifyDigest: true, MoneyEnabled: true}
 }
 
 func applySetting(st *Settings, k, v string, global bool) {
@@ -99,6 +100,20 @@ func applySetting(st *Settings, k, v string, global bool) {
 		st.InventoryURL = v
 	case "inventory_token":
 		st.InventoryToken = v
+	case "money_enabled":
+		st.MoneyEnabled = v != "0"
+	case "money_url":
+		st.MoneyURL = v
+	case "money_token":
+		st.MoneyToken = v
+	case "money_account":
+		st.MoneyAccount, _ = strconv.ParseInt(v, 10, 64)
+	case "money_category_fuel":
+		st.MoneyCategoryFuel, _ = strconv.ParseInt(v, 10, 64)
+	case "money_category":
+		st.MoneyCategory, _ = strconv.ParseInt(v, 10, 64)
+	case "money_vehicle_accounts":
+		st.MoneyVehicleAccts = v
 	}
 }
 
@@ -144,31 +159,38 @@ func (s *Store) GetUserSettings(ctx context.Context, userID int64, base Settings
 func settingsKV(st Settings) map[string]string {
 	b := map[bool]string{true: "1", false: "0"}
 	return map[string]string{
-		"title":             st.Title,
-		"fx_auto":           b[st.FXAuto],
-		"setup_complete":    b[st.SetupComplete],
-		"home_currency":     st.HomeCurrency,
-		"date_format":       st.DateFormat,
-		"time_format":       st.TimeFormat,
-		"distance_unit":     st.DistanceUnit,
-		"volume_unit":       st.VolumeUnit,
-		"economy_unit":      st.EconomyUnit,
-		"firefly_url":       st.FireflyURL,
-		"firefly_token":     st.FireflyToken,
-		"firefly_category":  st.FireflyCategory,
-		"firefly_account":   st.FireflyAccount,
-		"firefly_auto_sync": b[st.FireflyAutoSync],
-		"dawarich_url":      st.DawarichURL,
-		"dawarich_api_key":  st.DawarichAPIKey,
-		"notify_url":        st.NotifyURL,
-		"notify_format":     st.NotifyFormat,
-		"notify_hour":       strconv.Itoa(st.NotifyHour),
-		"notify_digest":     b[st.NotifyDigest],
-		"travel_url":        st.TravelURL,
-		"travel_token":      st.TravelToken,
-		"travel_public_url": st.TravelPublicURL,
-		"inventory_url":     st.InventoryURL,
-		"inventory_token":   st.InventoryToken,
+		"title":                  st.Title,
+		"fx_auto":                b[st.FXAuto],
+		"setup_complete":         b[st.SetupComplete],
+		"home_currency":          st.HomeCurrency,
+		"date_format":            st.DateFormat,
+		"time_format":            st.TimeFormat,
+		"distance_unit":          st.DistanceUnit,
+		"volume_unit":            st.VolumeUnit,
+		"economy_unit":           st.EconomyUnit,
+		"firefly_url":            st.FireflyURL,
+		"firefly_token":          st.FireflyToken,
+		"firefly_category":       st.FireflyCategory,
+		"firefly_account":        st.FireflyAccount,
+		"firefly_auto_sync":      b[st.FireflyAutoSync],
+		"dawarich_url":           st.DawarichURL,
+		"dawarich_api_key":       st.DawarichAPIKey,
+		"notify_url":             st.NotifyURL,
+		"notify_format":          st.NotifyFormat,
+		"notify_hour":            strconv.Itoa(st.NotifyHour),
+		"notify_digest":          b[st.NotifyDigest],
+		"travel_url":             st.TravelURL,
+		"travel_token":           st.TravelToken,
+		"travel_public_url":      st.TravelPublicURL,
+		"inventory_url":          st.InventoryURL,
+		"inventory_token":        st.InventoryToken,
+		"money_enabled":          b[st.MoneyEnabled],
+		"money_url":              st.MoneyURL,
+		"money_token":            st.MoneyToken,
+		"money_account":          strconv.FormatInt(st.MoneyAccount, 10),
+		"money_category_fuel":    strconv.FormatInt(st.MoneyCategoryFuel, 10),
+		"money_category":         strconv.FormatInt(st.MoneyCategory, 10),
+		"money_vehicle_accounts": st.MoneyVehicleAccts,
 	}
 }
 
