@@ -37,7 +37,7 @@ func newTwoPeople(t *testing.T, mutate ...func(*Server)) *twoPeople {
 	t.Helper()
 	dir := t.TempDir()
 	cfg := testConfig(dir)
-	cfg.FireflyURL, cfg.FireflyToken = "http://firefly.invalid", "owner-firefly-token"
+	cfg.DawarichURL, cfg.DawarichAPIKey = "http://dawarich.invalid", "owner-dawarich-key"
 	cfg.NotifyURL = "http://apprise.invalid/notify/garage"
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	st, err := store.Open(cfg.DBPath, log)
@@ -231,7 +231,7 @@ func TestMemberCannotSeeOwnersGarage(t *testing.T) {
 	// reads, searches and exports are 404, never 403
 	reads := []string{"", "/overview", "/activity", "/image", "/suggestions", "/records", "/records?q=secret", fmt.Sprintf("/records/%d", g.record),
 		"/fuel", fmt.Sprintf("/fuel/%d", g.fuel), "/odometer", "/reminders", "/plans", "/notes", "/documents", fmt.Sprintf("/documents/%d/file", g.doc),
-		"/reports", "/trips", "/dawarich/days", "/firefly/unmatched", "/export/calendar.ics", "/export/records.csv", "/export/fuel.csv", "/export/odometer.csv", "/export/vehicle.json"}
+		"/reports", "/trips", "/dawarich/days", "/export/calendar.ics", "/export/records.csv", "/export/fuel.csv", "/export/odometer.csv", "/export/vehicle.json"}
 	for _, path := range reads {
 		if code, body := p.do(p.bTok, "GET", v+path, nil); code != http.StatusNotFound {
 			t.Errorf("GET %s as member: %d %s", path, code, body)
@@ -240,14 +240,14 @@ func TestMemberCannotSeeOwnersGarage(t *testing.T) {
 	// writes are 404 too
 	writes := []struct{ method, path string }{
 		{"PUT", ""}, {"DELETE", ""}, {"PUT", "/members"}, {"DELETE", "/image"},
-		{"POST", "/records"}, {"PUT", fmt.Sprintf("/records/%d", g.record)}, {"DELETE", fmt.Sprintf("/records/%d", g.record)}, {"POST", fmt.Sprintf("/records/%d/firefly", g.record)},
+		{"POST", "/records"}, {"PUT", fmt.Sprintf("/records/%d", g.record)}, {"DELETE", fmt.Sprintf("/records/%d", g.record)},
 		{"POST", "/fuel"}, {"PUT", fmt.Sprintf("/fuel/%d", g.fuel)}, {"DELETE", fmt.Sprintf("/fuel/%d", g.fuel)},
 		{"POST", "/odometer"}, {"PUT", fmt.Sprintf("/odometer/%d", g.odo)}, {"DELETE", fmt.Sprintf("/odometer/%d", g.odo)}, {"POST", "/odometer/confirm"},
 		{"POST", "/reminders"}, {"PUT", fmt.Sprintf("/reminders/%d", g.reminder)}, {"DELETE", fmt.Sprintf("/reminders/%d", g.reminder)}, {"POST", fmt.Sprintf("/reminders/%d/done", g.reminder)},
 		{"POST", "/plans"}, {"PUT", fmt.Sprintf("/plans/%d", g.plan)}, {"DELETE", fmt.Sprintf("/plans/%d", g.plan)}, {"POST", fmt.Sprintf("/plans/%d/done", g.plan)},
 		{"POST", "/notes"}, {"PUT", fmt.Sprintf("/notes/%d", g.note)}, {"DELETE", fmt.Sprintf("/notes/%d", g.note)},
 		{"PUT", fmt.Sprintf("/documents/%d", g.doc)}, {"DELETE", fmt.Sprintf("/documents/%d", g.doc)},
-		{"POST", "/firefly/sync"}, {"POST", "/dawarich/sync"},
+		{"POST", "/dawarich/sync"},
 	}
 	for _, w := range writes {
 		if code, body := p.do(p.bTok, w.method, v+w.path, map[string]any{"title": "x", "description": "x", "reading": 1, "volume": 1, "members": []any{map[string]any{"user_id": p.b.ID, "role": "editor"}}}); code != http.StatusNotFound {
@@ -399,9 +399,6 @@ func TestSharedVehicleRolesAndOwnerOnlyIntegrations(t *testing.T) {
 	if code != 200 || !strings.Contains(body, `"firefly_tag":"fabia"`) || !strings.Contains(body, `"name":"Family car"`) || strings.Contains(body, `"dawarich":true`) {
 		t.Errorf("editor changed the owner's integration binding: %s", body)
 	}
-	if code, _ := p.do(p.bTok, "POST", fmt.Sprintf("%s/records/%d/firefly", v, g.record), nil); code != http.StatusForbidden {
-		t.Errorf("editor pushed into the owner's Firefly: %d", code)
-	}
 	if code, _ := p.do(p.bTok, "PUT", v+"/members", map[string]any{"members": []any{}}); code != http.StatusForbidden {
 		t.Errorf("editor changed members: %d", code)
 	}
@@ -425,7 +422,7 @@ func TestSharedVehicleRolesAndOwnerOnlyIntegrations(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("overview: %d %s", code, body)
 	}
-	if strings.Contains(body, "owner-firefly-token") {
+	if strings.Contains(body, "owner-dawarich-key") {
 		t.Errorf("overview leaks the owner's token")
 	}
 }
@@ -434,11 +431,11 @@ func TestSettingsArePersonal(t *testing.T) {
 	p := newTwoPeople(t)
 	// env integrations were seeded into the owner's own settings
 	code, body := p.do(p.aTok, "GET", "/api/v1/settings", nil)
-	if code != 200 || !strings.Contains(body, `"firefly_configured":true`) || !strings.Contains(body, `"notify_configured":true`) {
+	if code != 200 || !strings.Contains(body, `"dawarich_configured":true`) || !strings.Contains(body, `"notify_configured":true`) {
 		t.Fatalf("owner settings: %d %s", code, body)
 	}
 	code, body = p.do(p.bTok, "GET", "/api/v1/settings", nil)
-	if code != 200 || strings.Contains(body, "firefly.invalid") || strings.Contains(body, "apprise.invalid") || !strings.Contains(body, `"firefly_configured":false`) {
+	if code != 200 || strings.Contains(body, "dawarich.invalid") || strings.Contains(body, "apprise.invalid") || !strings.Contains(body, `"dawarich_configured":false`) {
 		t.Fatalf("member sees the owner's integrations: %d %s", code, body)
 	}
 	// the member saves their own; box-wide keys are ignored for a member
@@ -466,8 +463,8 @@ func TestSettingsArePersonal(t *testing.T) {
 		t.Errorf("member sees box internals: %s", body)
 	}
 	// each person's integration test and reminder run use their own settings
-	if code, body := p.do(p.bTok, "POST", "/api/v1/integrations/test", map[string]any{"which": "firefly"}); code != 200 || !strings.Contains(body, `"ok":false`) {
-		t.Errorf("member firefly test: %d %s", code, body)
+	if code, body := p.do(p.bTok, "POST", "/api/v1/integrations/test", map[string]any{"which": "dawarich"}); code != 200 || !strings.Contains(body, `"ok":false`) {
+		t.Errorf("member dawarich test: %d %s", code, body)
 	}
 }
 

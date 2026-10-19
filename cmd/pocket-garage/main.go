@@ -1,5 +1,5 @@
 // Command pocket-garage is a self-hosted vehicle log: fuel, service, repairs,
-// expenses, reminders and a planner, with spending from Firefly III, driven
+// expenses, reminders and a planner, with costs booked in Pocket Money, driven
 // kilometres from Dawarich and a LubeLogger-compatible API. One binary, one
 // SQLite file, one volume.
 package main

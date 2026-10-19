@@ -77,7 +77,6 @@ function General() {
           <tr><th>Odometer</th><td className="muted">Every fill-up or record with a reading <i>is</i> the odometer log. Dawarich adds the kilometres driven since.</td></tr>
           <tr><th>Reminders</th><td className="muted">By date, by odometer or both. Recurring ones roll forward when done; logging matching work completes them.</td></tr>
           <tr><th>Pocket Money</th><td className="muted">Costs you log can become transactions in your Pocket Money (through Pocket Core, or a token). Edits and deletes follow them.</td></tr>
-          <tr><th>Firefly</th><td className="muted">Tagged withdrawals link to what you logged; the rest become expenses. Rows can be pushed back as withdrawals.</td></tr>
           <tr><th>Phone & Raycast</th><td className="muted">The LubeLogger-shaped API lives at <code>/api/…</code>, so the Pocket Homelab app and the Raycast extension only need the new URL.</td></tr>
         </tbody></table>
       </Card>
@@ -89,9 +88,6 @@ function Integrations() {
   const { f, setF, save, busy } = useSettingsForm()
   const { toast } = useToast()
   const [test, setTest] = useState<Record<string, string>>({})
-  const [accounts, setAccounts] = useState<{ id: string; name: string; currency: string }[]>([])
-  const [cats, setCats] = useState<string[]>([])
-  useEffect(() => { if (f?.firefly_configured) { api.get<typeof accounts>(`${V1}/firefly/accounts`).then(setAccounts).catch(() => {}); api.get<string[]>(`${V1}/firefly/categories`).then(setCats).catch(() => {}) } }, [f?.firefly_configured])
   if (!f) return <Loading />
   const run = async (which: string, url: string, key: string, extra: Record<string, string> = {}) => {
     setTest(t => ({ ...t, [which]: 'testing…' }))
@@ -103,19 +99,6 @@ function Integrations() {
   return (
     <div className="grid" style={{ gap: 16 }}>
       <PocketMoneyCard f={f} setF={setF} run={run} status={status} save={save} />
-      <Card title="💶 Firefly III" actions={badge(f.firefly_configured)}>
-        <p className="muted small">What the car really costs. Tag the vehicle's withdrawals in Firefly (e.g. <code>skoda</code>) and set that tag on the vehicle. Rows matching a fill-up or record by date and amount are linked; the rest come in as expenses. Synced every 30 minutes and on demand.</p>
-        <div className="grid" style={{ gap: 12 }}>
-          <Field label="URL" help="Inside Docker use http://host.docker.internal:PORT or the service name."><input value={f.firefly_url} onChange={e => setF({ ...f, firefly_url: e.target.value })} placeholder="http://host.docker.internal:8083" /></Field>
-          <Field label="Personal access token" help="Firefly → Options → Profile → OAuth → Personal access tokens. Stored on the server; shown masked."><input value={f.firefly_token} onChange={e => setF({ ...f, firefly_token: e.target.value })} autoComplete="off" /></Field>
-          <div className="two-col tight">
-            <Field label="Pay from (default account for pushed withdrawals)">{accounts.length > 0 ? <Select value={f.firefly_account} onChange={a => setF({ ...f, firefly_account: a })} options={accounts.map(a => ({ value: a.name, label: a.name, hint: a.currency }))} clearLabel="None" /> : <input value={f.firefly_account} onChange={e => setF({ ...f, firefly_account: e.target.value })} placeholder="Checking account" />}</Field>
-            <Field label="Category for pushed withdrawals">{cats.length > 0 ? <Select value={f.firefly_category} onChange={c => setF({ ...f, firefly_category: c })} options={cats.map(c => ({ value: c, label: c }))} clearLabel="None" onCreate={c => c} /> : <input value={f.firefly_category} onChange={e => setF({ ...f, firefly_category: e.target.value })} placeholder="automobil" />}</Field>
-          </div>
-          <label className="row"><input type="checkbox" checked={f.firefly_auto_sync} onChange={e => setF({ ...f, firefly_auto_sync: e.target.checked })} style={{ width: 'auto' }} /> Sync tagged transactions automatically every 30 minutes</label>
-          <div className="row"><button className="btn sm" onClick={() => run('firefly', f.firefly_url, f.firefly_token)} disabled={!f.firefly_url}>Test connection</button>{status('firefly')}</div>
-        </div>
-      </Card>
       <Card title="🛰 Dawarich" actions={badge(f.dawarich_configured)}>
         <p className="muted small">Kilometres you actually drove, per day, from the location history. Pocket Garage adds them on top of the last odometer reading, so the estimate (and reminders by distance) stay current between fill-ups. Turn it on per vehicle under the vehicle's Settings tab.</p>
         <div className="grid" style={{ gap: 12 }}>
@@ -289,7 +272,7 @@ function Users() {
   const run = async (fn: () => Promise<unknown>, msg: string) => { try { await fn(); await reloadMeta(); toast(msg) } catch (e) { toast((e as Error).message, 'err') } }
   return (
     <Card title="Users" actions={isAdmin && <button className="btn primary sm" onClick={() => setEdit({ role: 'member' })}>+ Add user</button>}>
-      <p className="muted">Everyone signs in with their own account and keeps their own garage: a vehicle is visible only to its owner and the people the owner adds under the vehicle's Settings. Preferences and integrations (Firefly, Dawarich, notifications, Travel, Inventory) are personal too. Admins manage accounts and the box-wide settings but do not see anyone else's vehicles. The same email and password work as Basic auth for the phone app and Raycast.</p>
+      <p className="muted">Everyone signs in with their own account and keeps their own garage: a vehicle is visible only to its owner and the people the owner adds under the vehicle's Settings. Preferences and integrations (Pocket Money, Dawarich, notifications, Travel, Inventory) are personal too. Admins manage accounts and the box-wide settings but do not see anyone else's vehicles. The same email and password work as Basic auth for the phone app and Raycast.</p>
       <table className="table compact">
         <thead><tr><th /><th>Name</th><th>Email</th><th>Role</th><th /></tr></thead>
         <tbody>
@@ -411,7 +394,7 @@ function About() {
   const counts = (data?.counts || {}) as Record<string, number>
   return (
     <Card title="About">
-      <p><b>Pocket Garage</b> keeps every vehicle on one page: fuel with real economy, service and repairs with the parts fitted, expenses, an odometer that estimates itself from Dawarich, reminders that roll forward, a planner board, notes and documents — with the real spending from Firefly III and a LubeLogger-compatible API so the phone app and Raycast keep working. One binary, one SQLite file, one volume.</p>
+      <p><b>Pocket Garage</b> keeps every vehicle on one page: fuel with real economy, service and repairs with the parts fitted, expenses, an odometer that estimates itself from Dawarich, reminders that roll forward, a planner board, notes and documents — with every cost booked in Pocket Money and a LubeLogger-compatible API so the phone app and Raycast keep working. One binary, one SQLite file, one volume.</p>
       <p className="muted small">Open source (MIT) — <a href="https://github.com/abjelosevic88/pocket-homelab-garage" target="_blank" rel="noreferrer">github.com/abjelosevic88/pocket-homelab-garage</a>. Sibling projects: Pocket Habits, Pocket Inventory, Pocket Bookshelf, Pocket Split, Pocket Clips, Pocket Subtitles, Pocket Invoicing and Pocket Travel.</p>
       {data && (
         <table className="table compact mt">

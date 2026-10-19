@@ -29,7 +29,6 @@ export default function ServiceTab() {
   const done = () => { setEdit(null); reload(); reloadOv() }
   const ms = useMoneyStatus(v.id)
   const book = async (r: Rec) => { try { await api.post(`${V1}/vehicles/${v.id}/records/${r.id}/money`, {}); toast('Booked in Pocket Money'); reload() } catch (e) { toast((e as Error).message, 'err') } }
-  const push = async (r: Rec) => { try { await api.post(`${V1}/vehicles/${v.id}/records/${r.id}/firefly`); toast('Sent to Firefly'); reload() } catch (e) { toast((e as Error).message, 'err') } }
   return (
     <>
       <div className="toolbar">
@@ -47,10 +46,10 @@ export default function ServiceTab() {
               <tr key={r.id} onClick={() => setOpen(open === r.id ? null : r.id)} style={{ cursor: 'pointer' }}>
                 <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
                 <td><span className="badge cat">{KIND_ICON[r.kind]} {KIND_LABEL[r.kind]}</span>{r.category && <span className="badge" style={{ marginLeft: 4 }}>{r.category}</span>}</td>
-                <td><b>{r.description}</b>{r.vendor && <span className="muted small"> · {r.vendor}</span>}{(r.parts?.length || 0) > 0 && <span className="muted small"> · {r.parts.length} part{r.parts.length === 1 ? '' : 's'}</span>}{r.firefly_id && <span className="tag-src"> · firefly</span>}{r.money_tx_id && <span className="tag-src" title="Booked in Pocket Money"> · money</span>}{r.source !== 'manual' && r.source !== 'firefly' && <span className="tag-src"> · {r.source}</span>}</td>
+                <td><b>{r.description}</b>{r.vendor && <span className="muted small"> · {r.vendor}</span>}{(r.parts?.length || 0) > 0 && <span className="muted small"> · {r.parts.length} part{r.parts.length === 1 ? '' : 's'}</span>}{r.money_tx_id && <span className="tag-src" title="Booked in Pocket Money"> · money</span>}{r.source !== 'manual' && r.source !== 'firefly' && <span className="tag-src"> · {r.source}</span>}</td>
                 <td className="num muted">{r.odometer ? fmtOdo(r.odometer, v.odometer_unit, false) : ''}</td>
                 <td className="num">{r.cost > 0 ? <><Money minor={r.cost} code={r.currency} />{r.currency !== v.currency && <div className="muted small"><Money minor={r.cost_home} code={v.currency} /></div>}</> : <span className="muted">—</span>}</td>
-                <td className="right" style={{ whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>{canEdit && <>{ms?.connected && !r.money_tx_id && r.cost > 0 && <button className="btn ghost sm" onClick={() => book(r)} title="Create the transaction in Pocket Money">→ Money</button>}{!ms?.offer && v.role === 'owner' && overview.integrations.firefly && !r.firefly_id && r.cost > 0 && <button className="btn ghost sm" onClick={() => push(r)} title="Create the withdrawal in Firefly III">→ Firefly</button>}<button className="btn ghost sm" onClick={() => setEdit(r)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(r)}>✕</button></>}</td>
+                <td className="right" style={{ whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>{canEdit && <>{ms?.connected && !r.money_tx_id && r.cost > 0 && <button className="btn ghost sm" onClick={() => book(r)} title="Create the transaction in Pocket Money">→ Money</button>}<button className="btn ghost sm" onClick={() => setEdit(r)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(r)}>✕</button></>}</td>
               </tr>
               {open === r.id && (cleanNotes(r.notes) || (r.parts?.length || 0) > 0 || r.tags) && <tr key={`${r.id}-d`}><td colSpan={6} style={{ background: 'var(--surface-2)' }}>
                 {cleanNotes(r.notes) && <div className="small" style={{ whiteSpace: 'pre-wrap' }}>{cleanNotes(r.notes)}</div>}

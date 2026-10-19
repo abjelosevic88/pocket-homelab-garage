@@ -108,7 +108,6 @@ type vehicleInput struct {
 	Notes          *string  `json:"notes"`
 	Tags           *string  `json:"tags"`
 	FireflyTag     *string  `json:"firefly_tag"`
-	FireflyAccount *string  `json:"firefly_account"`
 	Dawarich       *bool    `json:"dawarich"`
 	SortOrder      *int     `json:"sort_order"`
 	InitialOdo     *float64 `json:"initial_odometer"` // create only: first reading
@@ -136,7 +135,6 @@ func applyVehicle(v *store.Vehicle, in vehicleInput, keys map[string]bool) strin
 	str("notes", &v.Notes, in.Notes)
 	str("tags", &v.Tags, in.Tags)
 	str("firefly_tag", &v.FireflyTag, in.FireflyTag)
-	str("firefly_account", &v.FireflyAccount, in.FireflyAccount)
 	if keys["year"] && in.Year != nil {
 		v.Year = *in.Year
 	}
@@ -245,12 +243,10 @@ func (s *Server) handleUpdateVehicle(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	oldTag := v.FireflyTag
 	if !s.isOwner(r) {
-		// the Firefly tag / account and the Dawarich switch drive syncs that run
-		// with the owner's own credentials, so only the owner picks them
+		// the vehicle's tag and the Dawarich switch are the owner's choice (the
+		// Dawarich sync runs with the owner's own credentials)
 		delete(keys, "firefly_tag")
-		delete(keys, "firefly_account")
 		delete(keys, "dawarich")
 	}
 	if msg := applyVehicle(v, in, keys); msg != "" {
@@ -262,9 +258,6 @@ func (s *Server) handleUpdateVehicle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.store.LogActivity(r.Context(), v.ID, userFrom(r.Context()).ID, "updated vehicle", v.Title())
-	if v.FireflyTag != "" && v.FireflyTag != oldTag {
-		go func(id int64) { _, _ = s.syncFirefly(context.Background(), id) }(v.ID)
-	}
 	v.Summary, _ = s.store.Summary(r.Context(), v)
 	writeJSON(w, http.StatusOK, v)
 }
@@ -419,12 +412,12 @@ func (s *Server) handleVehicleOverview(w http.ResponseWriter, r *http.Request) {
 	cl := s.clientsFor(ctx, userFrom(ctx).ID) // the viewer's own Travel / Inventory / notifications
 	owner := cl
 	if v.OwnerID != userFrom(ctx).ID {
-		owner = s.clientsFor(ctx, v.OwnerID) // Firefly / Dawarich syncs run with the owner's credentials
+		owner = s.clientsFor(ctx, v.OwnerID) // the Dawarich sync runs with the owner's credentials
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"vehicle": v, "reminders": rems, "recent_records": recent, "recent_fuel": fuel, "open_plans": open, "pinned_notes": pinned,
 		"expiring_documents": docs, "months": months, "activity": activity, "trips": s.tripsFor(ctx, userFrom(ctx), v),
-		"integrations": map[string]bool{"firefly": owner.firefly.Configured() && v.FireflyTag != "", "dawarich": owner.dawarich.Configured() && v.Dawarich, "travel": s.siblingVia(ctx, userFrom(ctx), "travel", cl.st.TravelMode, cl.st.TravelToken, travelScopes) != "", "inventory": s.siblingVia(ctx, userFrom(ctx), "inventory", cl.st.InventoryMode, cl.st.InventoryToken, inventoryScopes) != "", "notify": cl.notify.Configured()},
+		"integrations": map[string]bool{"dawarich": owner.dawarich.Configured() && v.Dawarich, "travel": s.siblingVia(ctx, userFrom(ctx), "travel", cl.st.TravelMode, cl.st.TravelToken, travelScopes) != "", "inventory": s.siblingVia(ctx, userFrom(ctx), "inventory", cl.st.InventoryMode, cl.st.InventoryToken, inventoryScopes) != "", "notify": cl.notify.Configured()},
 	})
 }
 

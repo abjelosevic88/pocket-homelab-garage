@@ -28,7 +28,6 @@ export default function FuelTab() {
   const prices = [...(data || [])].reverse().filter(f => f.volume > 0).map(f => ({ x: fmtDate(f.date, false), y: f.cost_home / f.volume }))
   const ms = useMoneyStatus(v.id)
   const book = async (f: Fuel) => { try { await api.post(`${V1}/vehicles/${v.id}/fuel/${f.id}/money`, {}); toast('Booked in Pocket Money'); reload() } catch (e) { toast((e as Error).message, 'err') } }
-  const push = async (f: Fuel) => { try { await api.post(`${V1}/vehicles/${v.id}/fuel/${f.id}/firefly`); toast('Sent to Firefly'); reload() } catch (e) { toast((e as Error).message, 'err') } }
   const ev = v.fuel_type === 'electric'
   return (
     <>
@@ -59,8 +58,8 @@ export default function FuelTab() {
                 <td className="num"><Money minor={f.cost} code={f.currency} />{f.currency !== v.currency && <div className="muted small"><Money minor={f.cost_home} code={v.currency} /></div>}</td>
                 <td className="num muted small">{f.volume > 0 ? fmtPricePer(f.price_per, f.currency, currencies.find(c => c.code === f.currency)?.decimals ?? 2, u) : ''}</td>
                 <td className="num">{f.economy > 0 ? fmtEcon(f.economy, u, v.odometer_unit) : <span className="muted">—</span>}</td>
-                <td className="muted">{f.station}{f.grade && <span className="small"> · {f.grade}</span>}{cleanNotes(f.notes) && <div className="small">{cleanNotes(f.notes)}</div>}{f.firefly_id && <span className="tag-src" title={`Firefly journal ${f.firefly_id}`}> · firefly</span>}{f.money_tx_id && <span className="tag-src" title="Booked in Pocket Money"> · money</span>}{f.source !== 'manual' && <span className="tag-src"> · {f.source}</span>}</td>
-                <td className="right" style={{ whiteSpace: 'nowrap' }}>{canEdit && <>{ms?.connected && !f.money_tx_id && f.cost > 0 && <button className="btn ghost sm" onClick={() => book(f)} title="Create the transaction in Pocket Money">→ Money</button>}{!ms?.offer && v.role === 'owner' && overview.integrations.firefly && !f.firefly_id && f.cost > 0 && <button className="btn ghost sm" onClick={() => push(f)} title="Create the withdrawal in Firefly III">→ Firefly</button>}<button className="btn ghost sm" onClick={() => setEdit(f)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(f)}>✕</button></>}</td>
+                <td className="muted">{f.station}{f.grade && <span className="small"> · {f.grade}</span>}{cleanNotes(f.notes) && <div className="small">{cleanNotes(f.notes)}</div>}{f.money_tx_id && <span className="tag-src" title="Booked in Pocket Money"> · money</span>}{f.source !== 'manual' && <span className="tag-src"> · {f.source}</span>}</td>
+                <td className="right" style={{ whiteSpace: 'nowrap' }}>{canEdit && <>{ms?.connected && !f.money_tx_id && f.cost > 0 && <button className="btn ghost sm" onClick={() => book(f)} title="Create the transaction in Pocket Money">→ Money</button>}<button className="btn ghost sm" onClick={() => setEdit(f)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(f)}>✕</button></>}</td>
               </tr>
             ))}</tbody>
           </table>

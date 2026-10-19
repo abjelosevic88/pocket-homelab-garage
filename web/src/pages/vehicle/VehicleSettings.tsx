@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { api, upload, V1 } from '../../lib/api'
 import { useApp } from '../../lib/app-context'
 import type { VehicleMember } from '../../lib/types'
-import { fmtDateTime } from '../../lib/format'
 import { Card, Confirm, Field, useToast } from '../../components/ui'
 import { Select } from '../../components/Select'
 import { useVehicle } from './ctx'
@@ -13,36 +12,23 @@ export default function VehicleSettings() {
   const { users, user, settings, reloadVehicles } = useApp()
   const { toast } = useToast()
   const navigate = useNavigate()
-  const [f, setF] = useState({ firefly_tag: v.firefly_tag, firefly_account: v.firefly_account, dawarich: v.dawarich })
-  const [tags, setTags] = useState<{ id: string; name: string }[]>([])
-  const [accounts, setAccounts] = useState<{ id: string; name: string; currency: string }[]>([])
+  const [f, setF] = useState({ firefly_tag: v.firefly_tag, dawarich: v.dawarich })
   const [members, setMembers] = useState<VehicleMember[]>(v.members || [])
   const [del, setDel] = useState(false)
   const [busy, setBusy] = useState('')
-  const [sync, setSync] = useState<{ fetched: number; matched: number; created: number; unmatched: number; notes?: string[] } | null>(null)
-  const [unmatched, setUnmatched] = useState<{ unmatched: { id: string; date: string; description: string; amount: number; currency: string; hint: string }[]; synced_at: string } | null>(null)
   const isOwner = v.role === 'owner' && v.owner_id === user?.id
-  useEffect(() => {
-    if (isOwner && settings?.firefly_configured) { api.get<typeof tags>(`${V1}/firefly/tags`).then(setTags).catch(() => {}); api.get<typeof accounts>(`${V1}/firefly/accounts`).then(setAccounts).catch(() => {}) }
-    api.get<typeof unmatched>(`${V1}/vehicles/${v.id}/firefly/unmatched`).then(setUnmatched).catch(() => {})
-  }, [isOwner, settings?.firefly_configured, v.id])
   const save = async () => { setBusy('save'); try { await api.put(`${V1}/vehicles/${v.id}`, f); toast('Saved'); reload() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy('') } }
-  const runSync = async () => { setBusy('sync'); try { setSync(await api.post(`${V1}/vehicles/${v.id}/firefly/sync`)); setUnmatched(await api.get(`${V1}/vehicles/${v.id}/firefly/unmatched`)); reload() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy('') } }
   const saveMembers = async () => { setBusy('members'); try { await api.put(`${V1}/vehicles/${v.id}/members`, { members }); toast('Sharing saved'); reload() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy('') } }
   const img = async (file: File) => { try { await upload(`${V1}/vehicles/${v.id}/image`, 'file', file); toast('Photo saved'); reload(); reloadVehicles() } catch (e) { toast((e as Error).message, 'err') } }
   const others = users.filter(u => u.id !== v.owner_id)
   return (
     <div className="two-col">
       <div className="grid" style={{ gap: 16 }}>
-        <Card title="💶 Firefly III" actions={<span className={`badge ${overview.integrations.firefly ? 'cat' : ''}`}>{overview.integrations.firefly ? 'linked' : settings?.firefly_configured ? 'no tag' : 'not configured'}</span>}>
-          {!isOwner && <p className="muted small">Linked to the owner's Firefly; only the owner picks the tag and the account.</p>}
-          <p className="muted small">Tag the car's withdrawals in Firefly with one tag. Matching rows (same date and amount) are linked to the fill-up or record you logged; anything else becomes an expense here, so the vehicle total is never short. “→ Firefly” on a row creates the withdrawal the other way.</p>
-          <div className="grid" style={{ gap: 12 }}>
-            {isOwner && <><Field label="Firefly tag">{tags.length > 0 ? <Select value={f.firefly_tag} onChange={t => setF({ ...f, firefly_tag: t })} options={tags.map(t => ({ value: t.name, label: t.name }))} clearLabel="No tag" onCreate={t => t} createLabel="Use tag" /> : <input value={f.firefly_tag} onChange={e => setF({ ...f, firefly_tag: e.target.value })} placeholder="skoda" />}</Field>
-            <Field label="Pay from (for pushed withdrawals)" help="Overrides the default account in Settings → Integrations.">{accounts.length > 0 ? <Select value={f.firefly_account} onChange={a => setF({ ...f, firefly_account: a })} options={accounts.map(a => ({ value: a.name, label: a.name, hint: a.currency }))} clearLabel="Use the default" /> : <input value={f.firefly_account} onChange={e => setF({ ...f, firefly_account: e.target.value })} />}</Field></>}
-            <div className="row">{isOwner && <button className="btn primary sm" onClick={save} disabled={busy === 'save'}>Save</button>}{overview.integrations.firefly && <button className="btn sm" onClick={runSync} disabled={busy === 'sync'}>{busy === 'sync' ? 'Syncing…' : 'Sync now'}</button>}{unmatched?.synced_at && <span className="muted small">last sync {fmtDateTime(unmatched.synced_at)}</span>}</div>
-            {sync && <div className="callout success small">{sync.fetched} transactions · {sync.matched} linked · {sync.created} added as expenses · {sync.unmatched} need you{sync.notes?.map((n, i) => <div key={i}>{n}</div>)}</div>}
-            {unmatched && unmatched.unmatched.length > 0 && <div className="callout small"><b>Firefly fuel payments with no fill-up here:</b> log the fill-up with the litres and the same date and amount; the next sync links them.<ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{unmatched.unmatched.map(t => <li key={t.id}>{t.date} · {t.description} · {(t.amount / 100).toFixed(2)} {t.currency}</li>)}</ul></div>}
+        <Card title="🏷 Tag">
+          <p className="muted small">Added to every transaction Garage books in Pocket Money for this vehicle (for example <code>skoda</code>), so Money can show what the car costs.{!isOwner && ' Only the owner changes it.'}</p>
+          <div className="row">
+            <input value={f.firefly_tag} onChange={e => setF({ ...f, firefly_tag: e.target.value })} placeholder="skoda" disabled={!isOwner} style={{ maxWidth: 240 }} />
+            {isOwner && <button className="btn primary sm" onClick={save} disabled={busy === 'save'}>Save</button>}
           </div>
         </Card>
         <Card title="🛰 Dawarich" actions={<span className={`badge ${overview.integrations.dawarich ? 'cat' : ''}`}>{overview.integrations.dawarich ? 'on' : settings?.dawarich_configured ? 'off' : 'not configured'}</span>}>

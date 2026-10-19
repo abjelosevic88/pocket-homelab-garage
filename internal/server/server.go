@@ -25,7 +25,6 @@ import (
 	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/config"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/dawarich"
-	"github.com/abjelosevic88/pocket-homelab-garage/internal/firefly"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/fx"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/lubelogger"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/notify"
@@ -166,7 +165,7 @@ func (s *Server) firstAdmin(ctx context.Context) *store.User {
 }
 
 // seedOwnerSettings fills the owner's empty integration settings from the
-// environment (FIREFLY_URL, DAWARICH_URL, NOTIFY_URL, ...).
+// environment (DAWARICH_URL, NOTIFY_URL, ...).
 func (s *Server) seedOwnerSettings(ctx context.Context, ownerID int64) error {
 	st := s.settingsFor(ctx, ownerID)
 	changed := false
@@ -186,8 +185,6 @@ func (s *Server) seedOwnerSettings(ctx context.Context, ownerID int64) error {
 			_ = s.store.CachePut(ctx, key, "1")
 		}
 	}
-	set("FireflyURL", &st.FireflyURL, s.cfg.FireflyURL)
-	set("FireflyToken", &st.FireflyToken, s.cfg.FireflyToken)
 	set("DawarichURL", &st.DawarichURL, s.cfg.DawarichURL)
 	set("DawarichAPIKey", &st.DawarichAPIKey, s.cfg.DawarichAPIKey)
 	set("NotifyURL", &st.NotifyURL, s.cfg.NotifyURL)
@@ -230,7 +227,7 @@ func (s *Server) settingsFor(ctx context.Context, userID int64) store.Settings {
 	return st
 }
 
-// janitor runs the background work: Firefly + Dawarich sync every 30 minutes,
+// janitor runs the background work: the Dawarich sync every 30 minutes,
 // the reminder check once a day at the configured hour.
 func (s *Server) janitor(ctx context.Context) {
 	// first pass shortly after boot so a fresh install shows data quickly
@@ -280,7 +277,6 @@ func (s *Server) maybeNotify(ctx context.Context) {
 
 type clients struct {
 	st        store.Settings
-	firefly   *firefly.Client
 	dawarich  *dawarich.Client
 	notify    *notify.Client
 	travel    *pocket.Client
@@ -290,11 +286,6 @@ type clients struct {
 // clientsFor builds the integration clients from one person's settings.
 func (s *Server) clientsFor(ctx context.Context, userID int64) clients {
 	st := s.settingsFor(ctx, userID)
-	if st.FireflyURL == "" && st.FireflyToken != "" {
-		if u := s.resolveSibling(ctx, "money"); u != "" {
-			st.FireflyURL = u + "/firefly"
-		}
-	}
 	if st.TravelURL == "" && st.TravelToken != "" {
 		st.TravelURL = s.resolveSibling(ctx, "travel")
 	}
@@ -302,7 +293,6 @@ func (s *Server) clientsFor(ctx context.Context, userID int64) clients {
 		st.InventoryURL = s.resolveSibling(ctx, "inventory")
 	}
 	return clients{st: st,
-		firefly:   firefly.New(st.FireflyURL, st.FireflyToken, 20*time.Second),
 		dawarich:  dawarich.New(st.DawarichURL, st.DawarichAPIKey, 60*time.Second),
 		notify:    notify.New(st.NotifyURL, st.NotifyFormat),
 		travel:    pocket.New(st.TravelURL, st.TravelToken, 15*time.Second),
@@ -395,7 +385,6 @@ func (s *Server) Router() http.Handler {
 				r.Get("/records/{id}", s.handleGetRecord)
 				r.Put("/records/{id}", s.handleUpdateRecord)
 				r.Delete("/records/{id}", s.handleDeleteRecord)
-				r.Post("/records/{id}/firefly", s.handlePushRecordFirefly)
 				r.Post("/records/{id}/money", s.handleBookRecordMoney)
 
 				r.Get("/fuel", s.handleListFuel)
@@ -403,7 +392,6 @@ func (s *Server) Router() http.Handler {
 				r.Get("/fuel/{id}", s.handleGetFuel)
 				r.Put("/fuel/{id}", s.handleUpdateFuel)
 				r.Delete("/fuel/{id}", s.handleDeleteFuel)
-				r.Post("/fuel/{id}/firefly", s.handlePushFuelFirefly)
 				r.Post("/fuel/{id}/money", s.handleBookFuelMoney)
 
 				r.Get("/odometer", s.handleOdometerHistory)
@@ -441,8 +429,6 @@ func (s *Server) Router() http.Handler {
 				r.Get("/trips", s.handleVehicleTrips)
 				r.Get("/dawarich/days", s.handleDawarichDays)
 				r.Post("/dawarich/sync", s.handleDawarichSync)
-				r.Post("/firefly/sync", s.handleFireflySync)
-				r.Get("/firefly/unmatched", s.handleFireflyUnmatched)
 
 				r.Get("/export/calendar.ics", s.handleExportICS)
 				r.Get("/export/{kind}.csv", s.handleExportCSV)
@@ -451,9 +437,6 @@ func (s *Server) Router() http.Handler {
 
 			r.Get("/money", s.handleMoneyStatus)
 			r.Get("/money/categories", s.handleMoneyCategories)
-			r.Get("/firefly/tags", s.handleFireflyTags)
-			r.Get("/firefly/accounts", s.handleFireflyAccounts)
-			r.Get("/firefly/categories", s.handleFireflyCategories)
 			r.Get("/inventory/search", s.handleInventorySearch)
 			r.Post("/integrations/test", s.handleIntegrationTest)
 			r.Post("/notify/test", s.handleNotifyTest)

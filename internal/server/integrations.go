@@ -19,7 +19,6 @@ import (
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/currency"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/dawarich"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/export"
-	"github.com/abjelosevic88/pocket-homelab-garage/internal/firefly"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/lubelogger"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/money"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/notify"
@@ -54,8 +53,6 @@ func (s *Server) publicSettings(ctx context.Context, u *store.User, st store.Set
 		"money_mode": moneyMode, "money_via": moneyVia, "money_detail": moneyDetail,
 		"title": st.Title, "home_currency": st.HomeCurrency, "date_format": st.DateFormat, "time_format": st.TimeFormat,
 		"distance_unit": st.DistanceUnit, "volume_unit": st.VolumeUnit, "economy_unit": st.EconomyUnit, "fx_auto": st.FXAuto, "fx_provider": s.cfg.FXProvider,
-		"firefly_url": st.FireflyURL, "firefly_token": mask(st.FireflyToken), "firefly_configured": st.FireflyURL != "" && st.FireflyToken != "",
-		"firefly_category": st.FireflyCategory, "firefly_account": st.FireflyAccount, "firefly_auto_sync": st.FireflyAutoSync,
 		"dawarich_url": st.DawarichURL, "dawarich_api_key": mask(st.DawarichAPIKey), "dawarich_configured": st.DawarichURL != "" && st.DawarichAPIKey != "",
 		"notify_url": st.NotifyURL, "notify_format": st.NotifyFormat, "notify_hour": st.NotifyHour, "notify_digest": st.NotifyDigest, "notify_configured": st.NotifyURL != "",
 		"travel_url": st.TravelURL, "travel_public_url": st.TravelPublicURL, "travel_token": mask(st.TravelToken), "travel_configured": travelVia != "",
@@ -128,17 +125,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if keys[k] {
 			*dst = strings.TrimRight(strings.TrimSpace(v), "/")
 		}
-	}
-	url("firefly_url", &cur.FireflyURL, in.FireflyURL)
-	secret("firefly_token", &cur.FireflyToken, in.FireflyToken)
-	if keys["firefly_category"] {
-		cur.FireflyCategory = strings.TrimSpace(in.FireflyCategory)
-	}
-	if keys["firefly_account"] {
-		cur.FireflyAccount = strings.TrimSpace(in.FireflyAccount)
-	}
-	if keys["firefly_auto_sync"] {
-		cur.FireflyAutoSync = in.FireflyAutoSync
 	}
 	url("dawarich_url", &cur.DawarichURL, in.DawarichURL)
 	secret("dawarich_api_key", &cur.DawarichAPIKey, in.DawarichAPIKey)
@@ -231,10 +217,6 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 	var msg string
 	var err error
 	switch in.Which {
-	case "firefly":
-		var v string
-		v, err = firefly.New(urlOr(st.FireflyURL), keyOr(st.FireflyToken), 15*time.Second).About(ctx)
-		msg = "Firefly III " + v
 	case "dawarich":
 		c := dawarich.New(urlOr(st.DawarichURL), keyOr(st.DawarichAPIKey), 15*time.Second)
 		err = c.Health(ctx)
@@ -555,222 +537,8 @@ func majorString(minor int64, code string) string {
 	return strconv.FormatFloat(float64(minor)/math.Pow10(dec), 'f', dec, 64) + " " + code
 }
 
-// ---- Firefly ----
-
-func (s *Server) handleFireflyTags(w http.ResponseWriter, r *http.Request) {
-	cl := s.clientsFor(r.Context(), userFrom(r.Context()).ID)
-	if !cl.firefly.Configured() {
-		writeJSON(w, http.StatusOK, []firefly.Tag{})
-		return
-	}
-	tags, err := cl.firefly.Tags(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, tags)
-}
-
-func (s *Server) handleFireflyAccounts(w http.ResponseWriter, r *http.Request) {
-	cl := s.clientsFor(r.Context(), userFrom(r.Context()).ID)
-	if !cl.firefly.Configured() {
-		writeJSON(w, http.StatusOK, []firefly.Account{})
-		return
-	}
-	acc, err := cl.firefly.Accounts(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, acc)
-}
-
-func (s *Server) handleFireflyCategories(w http.ResponseWriter, r *http.Request) {
-	cl := s.clientsFor(r.Context(), userFrom(r.Context()).ID)
-	if !cl.firefly.Configured() {
-		writeJSON(w, http.StatusOK, []string{})
-		return
-	}
-	c, err := cl.firefly.Categories(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, c)
-}
-
-// fireflySyncResult says what a sync did.
-type fireflySyncResult struct {
-	Fetched   int      `json:"fetched"`
-	Matched   int      `json:"matched"`
-	Created   int      `json:"created"`
-	Unmatched int      `json:"unmatched"`
-	Error     string   `json:"error,omitempty"`
-	Notes     []string `json:"notes,omitempty"`
-}
-
-// fuelWords mark a Firefly description as a fill-up.
-var fuelWords = []string{"gorivo", "fuel", "benzin", "dizel", "diesel", "petrol", "gas station", "tank", "eurodizel", "ina ", "petrol ", "shell", "omv", "mol ", "nestro", "g-petrol", "hifa", "charging", "supercharger", "ionity"}
-
-func looksLikeFuel(desc string) bool {
-	d := strings.ToLower(desc)
-	for _, w := range fuelWords {
-		if strings.Contains(d, w) {
-			return true
-		}
-	}
-	return false
-}
-
-// syncFirefly pulls the withdrawals carrying the vehicle's tag. A transaction
-// that matches an existing fuel/record row (same date ±1 day, same amount
-// and currency) is linked to it; the rest become expense records so nothing
-// paid is missing from the vehicle's total.
-func (s *Server) syncFirefly(ctx context.Context, vehicleID int64) (*fireflySyncResult, error) {
-	s.syncMu.Lock()
-	if s.syncing[vehicleID] {
-		s.syncMu.Unlock()
-		return &fireflySyncResult{Notes: []string{"a sync is already running"}}, nil
-	}
-	s.syncing[vehicleID] = true
-	s.syncMu.Unlock()
-	defer func() {
-		s.syncMu.Lock()
-		delete(s.syncing, vehicleID)
-		s.syncMu.Unlock()
-	}()
-	v, err := s.store.GetVehicle(ctx, vehicleID, 0)
-	if err != nil {
-		return nil, err
-	}
-	cl := s.clientsFor(ctx, v.OwnerID) // the owner's Firefly, whoever pressed sync
-	if !cl.firefly.Configured() || v.FireflyTag == "" {
-		return &fireflySyncResult{Notes: []string{"Firefly is not configured or the vehicle has no tag"}}, nil
-	}
-	tag, err := cl.firefly.TagByName(ctx, v.FireflyTag)
-	if err != nil {
-		return nil, err
-	}
-	if tag == nil {
-		return &fireflySyncResult{Notes: []string{"tag not found in Firefly: " + v.FireflyTag}}, nil
-	}
-	start := v.PurchaseDate
-	if start == "" {
-		start = "2000-01-01"
-	}
-	txs, err := cl.firefly.TagTransactions(ctx, tag.ID, start, "")
-	if err != nil {
-		return nil, err
-	}
-	res := &fireflySyncResult{Fetched: len(txs)}
-	records, _ := s.store.ListRecords(ctx, v.ID, store.RecordFilter{})
-	fuel, _ := s.store.ListFuel(ctx, v.ID)
-	amountMinor := func(t firefly.Transaction) (int64, string) {
-		dec := t.Decimals
-		if dec == 0 {
-			dec = currency.Decimals(t.Currency)
-		}
-		return int64(math.Round(t.Amount * math.Pow10(dec))), strings.ToUpper(t.Currency)
-	}
-	near := func(a, b string) bool { return store.DaysBetween(a, b) <= 1 || store.DaysBetween(b, a) <= 1 }
-	var unmatched []map[string]any
-	for _, t := range txs {
-		if _, _, ok := s.store.RecordByFirefly(ctx, v.ID, t.ID); ok {
-			res.Matched++
-			continue
-		}
-		amt, cur := amountMinor(t)
-		linked := false
-		for i := range fuel {
-			f := &fuel[i]
-			if f.FireflyID == "" && f.Cost == amt && f.Currency == cur && near(f.Date, t.Date) {
-				f.FireflyID = t.ID
-				_ = s.store.UpdateFuel(ctx, f)
-				linked = true
-				break
-			}
-		}
-		if !linked {
-			for i := range records {
-				rc := &records[i]
-				if rc.FireflyID == "" && rc.Cost == amt && rc.Currency == cur && near(rc.Date, t.Date) {
-					rc.FireflyID = t.ID
-					_ = s.store.UpdateRecord(ctx, rc)
-					linked = true
-					break
-				}
-			}
-		}
-		if linked {
-			res.Matched++
-			continue
-		}
-		if looksLikeFuel(t.Description) {
-			// a fill-up without litres cannot be a fuel row; keep it visible for the user to complete
-			unmatched = append(unmatched, map[string]any{"id": t.ID, "date": t.Date, "description": t.Description, "amount": amt, "currency": cur, "category": t.Category, "hint": "fuel"})
-			res.Unmatched++
-			continue
-		}
-		rate, _ := s.rate(ctx, cur, v.Currency, t.Date)
-		rec := &store.Record{VehicleID: v.ID, Kind: "expense", Category: guessCategory(t), Date: t.Date, Description: t.Description, Notes: strings.TrimSpace(t.Notes), Vendor: t.Destination, Cost: amt, Currency: cur, FXRate: rate, CostHome: convert(amt, cur, v.Currency, rate), Source: "firefly", ExternalID: t.ID, FireflyID: t.ID, Parts: []store.Part{}}
-		if err := s.store.CreateRecord(ctx, rec); err == nil {
-			res.Created++
-			s.store.LogActivity(ctx, v.ID, 0, "imported from Firefly", rec.Description)
-		}
-	}
-	b, _ := json.Marshal(unmatched)
-	_ = s.store.CachePut(ctx, fmt.Sprintf("firefly:unmatched:%d", v.ID), string(b))
-	_ = s.store.CachePut(ctx, fmt.Sprintf("firefly:synced:%d", v.ID), store.Now())
-	return res, nil
-}
-
-func guessCategory(t firefly.Transaction) string {
-	d := strings.ToLower(t.Description + " " + t.Category)
-	switch {
-	case strings.Contains(d, "registr"):
-		return "registration"
-	case strings.Contains(d, "osigur") || strings.Contains(d, "insur"):
-		return "insurance"
-	case strings.Contains(d, "pranje") || strings.Contains(d, "wash"):
-		return "wash"
-	case strings.Contains(d, "parking"):
-		return "parking"
-	case strings.Contains(d, "putarin") || strings.Contains(d, "toll"):
-		return "toll"
-	case strings.Contains(d, "kazna") || strings.Contains(d, "fine"):
-		return "fine"
-	case strings.Contains(d, "tehnič") || strings.Contains(d, "tehnic") || strings.Contains(d, "inspection"):
-		return "inspection"
-	}
-	return ""
-}
-
-func (s *Server) handleFireflySync(w http.ResponseWriter, r *http.Request) {
-	if !s.canEdit(w, r) {
-		return
-	}
-	res, err := s.syncFirefly(r.Context(), vehicleFrom(r.Context()).vehicle.ID)
-	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, res)
-}
-
-func (s *Server) handleFireflyUnmatched(w http.ResponseWriter, r *http.Request) {
-	v := vehicleFrom(r.Context()).vehicle
-	val, at, _ := s.store.CacheGet(r.Context(), fmt.Sprintf("firefly:unmatched:%d", v.ID))
-	var list []map[string]any
-	_ = json.Unmarshal([]byte(val), &list)
-	if list == nil {
-		list = []map[string]any{}
-	}
-	synced, _, _ := s.store.CacheGet(r.Context(), fmt.Sprintf("firefly:synced:%d", v.ID))
-	writeJSON(w, http.StatusOK, map[string]any{"unmatched": list, "fetched_at": at, "synced_at": synced})
-}
-
-// autoSync refreshes Firefly and Dawarich person by person: each owner's
-// vehicles with that owner's own credentials.
+// autoSync refreshes Dawarich person by person: each owner's vehicles with
+// that owner's own credentials.
 func (s *Server) autoSync(ctx context.Context) {
 	users, err := s.store.ListUsers(ctx)
 	if err != nil {
@@ -778,9 +546,7 @@ func (s *Server) autoSync(ctx context.Context) {
 	}
 	for _, u := range users {
 		st := s.settingsFor(ctx, u.ID)
-		fireflyOn := st.FireflyAutoSync && st.FireflyToken != ""
-		dawarichOn := st.DawarichURL != "" && st.DawarichAPIKey != ""
-		if !fireflyOn && !dawarichOn {
+		if st.DawarichURL == "" || st.DawarichAPIKey == "" {
 			continue
 		}
 		vs, err := s.store.ListVehicles(ctx, store.VehicleFilter{OwnerID: u.ID})
@@ -792,97 +558,13 @@ func (s *Server) autoSync(ctx context.Context) {
 			if v.Status == "archived" {
 				continue
 			}
-			if fireflyOn && v.FireflyTag != "" {
-				if _, err := s.syncFirefly(ctx, v.ID); err != nil {
-					s.log.Warn("firefly auto sync", "vehicle", v.Title(), "err", err)
-				}
-			}
-			if dawarichOn && v.Dawarich {
+			if v.Dawarich {
 				if _, err := s.syncDawarich(ctx, v); err != nil {
 					s.log.Warn("dawarich sync", "vehicle", v.Title(), "err", err)
 				}
 			}
 		}
 	}
-}
-
-// pushFirefly creates a withdrawal for a record or fill-up in the owner's Firefly.
-func (s *Server) pushFirefly(ctx context.Context, v *store.Vehicle, date, desc string, amount int64, cur, notes string, kind string) (string, error) {
-	cl := s.clientsFor(ctx, v.OwnerID)
-	if !cl.firefly.Configured() {
-		return "", fmt.Errorf("firefly is not configured")
-	}
-	acct := v.FireflyAccount
-	if acct == "" {
-		acct = cl.st.FireflyAccount
-	}
-	dec := currency.Decimals(cur)
-	tags := []string{}
-	if v.FireflyTag != "" {
-		tags = append(tags, v.FireflyTag)
-	}
-	w := firefly.Withdrawal{Date: date, Amount: strconv.FormatFloat(float64(amount)/math.Pow10(dec), 'f', dec, 64), Currency: cur, Description: desc, Source: acct, Category: cl.st.FireflyCategory, Tags: tags, Notes: strings.TrimSpace("Pocket Garage: " + kind + "\n" + notes)}
-	return cl.firefly.CreateWithdrawal(ctx, w)
-}
-
-func (s *Server) handlePushRecordFirefly(w http.ResponseWriter, r *http.Request) {
-	if !s.isOwner(r) {
-		writeErr(w, http.StatusForbidden, "only the owner can send to their Firefly")
-		return
-	}
-	v := vehicleFrom(r.Context()).vehicle
-	rec, err := s.store.GetRecord(r.Context(), v.ID, idParam(r, "id"))
-	if err != nil {
-		s.fail(w, err, "record")
-		return
-	}
-	if rec.FireflyID != "" {
-		writeErr(w, http.StatusConflict, "already in Firefly")
-		return
-	}
-	if rec.Cost <= 0 {
-		writeErr(w, http.StatusBadRequest, "nothing to push: the record has no cost")
-		return
-	}
-	id, err := s.pushFirefly(r.Context(), v, rec.Date, v.Title()+" "+rec.Description, rec.Cost, rec.Currency, rec.Notes, rec.Kind)
-	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	rec.FireflyID = id
-	_ = s.store.UpdateRecord(r.Context(), rec)
-	s.store.LogActivity(r.Context(), v.ID, userFrom(r.Context()).ID, "sent to Firefly", rec.Description)
-	writeJSON(w, http.StatusOK, rec)
-}
-
-func (s *Server) handlePushFuelFirefly(w http.ResponseWriter, r *http.Request) {
-	if !s.isOwner(r) {
-		writeErr(w, http.StatusForbidden, "only the owner can send to their Firefly")
-		return
-	}
-	v := vehicleFrom(r.Context()).vehicle
-	f, err := s.store.GetFuel(r.Context(), v.ID, idParam(r, "id"))
-	if err != nil {
-		s.fail(w, err, "fuel")
-		return
-	}
-	if f.FireflyID != "" {
-		writeErr(w, http.StatusConflict, "already in Firefly")
-		return
-	}
-	desc := v.Title() + " gorivo"
-	if f.Station != "" {
-		desc = v.Title() + " fuel · " + f.Station
-	}
-	id, err := s.pushFirefly(r.Context(), v, f.Date, desc, f.Cost, f.Currency, fmt.Sprintf("%.2f l at %.0f %s", f.Volume, f.Odometer, v.OdometerUnit), "fuel")
-	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	f.FireflyID = id
-	_ = s.store.UpdateFuel(r.Context(), f)
-	s.store.LogActivity(r.Context(), v.ID, userFrom(r.Context()).ID, "sent to Firefly", "fill-up")
-	writeJSON(w, http.StatusOK, s.fuelWithStats(r.Context(), v.ID, f.ID))
 }
 
 // ---- Dawarich ----

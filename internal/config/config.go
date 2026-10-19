@@ -51,8 +51,6 @@ type Config struct {
 	FXProvider      string // auto | frankfurter | erapi | none
 
 	// Integration defaults; the values saved under Settings → Integrations win.
-	FireflyURL      string
-	FireflyToken    string
 	DawarichURL     string
 	DawarichAPIKey  string
 	NotifyURL       string
@@ -161,8 +159,6 @@ func Load() (*Config, error) {
 		VolumeUnit:      strings.ToLower(env("VOLUME_UNIT", "l")),
 		FXProvider:      strings.ToLower(env("FX_PROVIDER", "auto")),
 
-		FireflyURL:      strings.TrimRight(env("FIREFLY_URL", ""), "/"),
-		FireflyToken:    env("FIREFLY_TOKEN", ""),
 		DawarichURL:     strings.TrimRight(env("DAWARICH_URL", ""), "/"),
 		DawarichAPIKey:  env("DAWARICH_API_KEY", ""),
 		NotifyURL:       env("NOTIFY_URL", ""),

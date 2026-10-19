@@ -17,7 +17,7 @@ Everything is read from environment variables; every value has a default so a ba
 | `AUTH_PROXY_HEADER` / `AUTH_PROXY_EMAIL_HEADER` | `Remote-User` / `Remote-Email` | Headers for proxy mode |
 | `SESSION_TTL` | `720h` | Cookie lifetime |
 | `SECURE_COOKIES` | `false` | Set `true` behind HTTPS |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` | – | Create the first admin on an empty database (otherwise the UI asks). Integration variables (`FIREFLY_*`, `DAWARICH_*`, `NOTIFY_URL`, `TRAVEL_*`, `INVENTORY_*`) seed **this owner's** own settings; every other person connects their own under Settings → Integrations |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` | – | Create the first admin on an empty database (otherwise the UI asks). Integration variables (`DAWARICH_*`, `NOTIFY_URL`, `TRAVEL_*`, `INVENTORY_*`) seed **this owner's** own settings once (clearing one in Settings sticks); every other person connects their own under Settings → Integrations |
 | `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | – | Sign in with an OpenID Connect provider (Pocket Core, PocketID, Authelia, Authentik, Keycloak…). Needs `BASE_URL`; the callback is `BASE_URL/api/v1/auth/oidc/callback`. On a box with Pocket Core none of these are needed — the app receives its client when it registers. |
 | `OIDC_NAME` | `single sign-on` | Button label: “Sign in with …” (“Pocket Core” for the client Core issued) |
 | `OIDC_AUTO_CREATE` | `true` | Give an unknown (verified) email a member account instead of refusing it; always on for the client Core issued, since Core already vouches for the person |
@@ -25,14 +25,13 @@ Everything is read from environment variables; every value has a default so a ba
 | `DISTANCE_UNIT` | `km` | `km` or `mi` for new vehicles |
 | `VOLUME_UNIT` | `l` | `l`, `gal_us`, `gal_uk` |
 | `FX_PROVIDER` | `auto` | `auto`, `frankfurter`, `erapi`, `none`. Euro pegs (BAM, BGN, XOF…) are built in. |
-| `FIREFLY_URL` / `FIREFLY_TOKEN` | – | Firefly III base URL and personal access token |
 | `DAWARICH_URL` / `DAWARICH_API_KEY` | – | Dawarich |
 | `NOTIFY_URL` / `NOTIFY_FORMAT` / `NOTIFY_HOUR` | – / guessed / `8` | Apprise `…/notify/<key>`, ntfy topic URL or JSON webhook; `apprise`, `ntfy`, `json`; hour of the daily reminder check |
 | `TRAVEL_URL` / `TRAVEL_TOKEN` / `TRAVEL_PUBLIC_URL` | – | Pocket Travel (public URL = what the browser opens for trip links) |
 | `INVENTORY_URL` / `INVENTORY_TOKEN` | – | Pocket Inventory |
 | `LUBELOGGER_URL` / `LUBELOGGER_USERNAME` / `LUBELOGGER_PASSWORD` | – | Import everything once on the first start (while the database has no vehicles). `LUBELOGGER_IMPORT_ON_START=false` disables that. |
 | `USER_AGENT` | `PocketGarage/1.0 (…)` | Sent to the exchange-rate providers |
-| `CORE_URL` / `CORE_REGISTRATION_KEY` | – | [Pocket Core](https://git.bjelke.org/abjelosevic88/pocket-homelab-core): register on start (the key is needed once; the minted app token lives in `$DATA_DIR/core.token`), publish `garage.fuel_logged` / `garage.service_logged` / `garage.odometer_updated`, accept the tokens Core hands to paired phones, and resolve Pocket Money (Firefly API) / Travel / Inventory through Core when their `*_URL` is empty |
+| `CORE_URL` / `CORE_REGISTRATION_KEY` | – | [Pocket Core](https://git.bjelke.org/abjelosevic88/pocket-homelab-core): register on start (the key is needed once; the minted app token lives in `$DATA_DIR/core.token`), publish `garage.fuel_logged` / `garage.service_logged` / `garage.odometer_updated`, accept the tokens Core hands to paired phones, and reach Pocket Money / Travel / Inventory through Core app links (or a direct URL + token per person) |
 | `CORE_APP_URL` | `BASE_URL` | How Core reaches this app for health checks (e.g. `http://host.docker.internal:8175`) |
 | `DEMO_DATA` | `false` | Seed a sample car and motorcycle on an empty database |
 

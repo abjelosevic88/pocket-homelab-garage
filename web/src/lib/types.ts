@@ -6,7 +6,6 @@ export interface Settings {
   title: string; home_currency: string; date_format: string; time_format: string
   distance_unit: 'km' | 'mi'; volume_unit: 'l' | 'gal_us' | 'gal_uk'; economy_unit: 'l100' | 'kml' | 'mpg_us' | 'mpg_uk'
   fx_auto: boolean; fx_provider: string
-  firefly_url: string; firefly_token: string; firefly_configured: boolean; firefly_category: string; firefly_account: string; firefly_auto_sync: boolean
   dawarich_url: string; dawarich_api_key: string; dawarich_configured: boolean
   notify_url: string; notify_format: string; notify_hour: number; notify_digest: boolean; notify_configured: boolean
   travel_url: string; travel_public_url: string; travel_token: string; travel_configured: boolean
@@ -40,7 +39,7 @@ export interface Vehicle {
   kind: string; fuel_type: string; odometer_unit: 'km' | 'mi' | 'h'; tank_capacity: number; currency: string; color: string; has_image: boolean
   purchase_date: string; purchase_price: number; purchase_odo: number; sold_date: string; sold_price: number
   status: 'active' | 'sold' | 'archived'; odometer_offset: number; notes: string; tags: string
-  firefly_tag: string; firefly_account: string; dawarich: boolean; sort_order: number; external_id: string
+  firefly_tag: string; dawarich: boolean; sort_order: number; external_id: string
   created_at: string; updated_at: string; display_name: string; role?: string; members?: VehicleMember[]; summary?: Summary
 }
 
@@ -81,7 +80,7 @@ export interface TripLink { id: number; name: string; destination: string; start
 export interface Overview {
   vehicle: Vehicle; reminders: Reminder[]; recent_records: Rec[]; recent_fuel: Fuel[]; open_plans: number; pinned_notes: Note[]
   expiring_documents: Doc[]; months: MonthlyCost[]; activity: Activity[]; trips: TripLink[]
-  integrations: { firefly: boolean; dawarich: boolean; travel: boolean; inventory: boolean; notify: boolean }
+  integrations: { dawarich: boolean; travel: boolean; inventory: boolean; notify: boolean }
 }
 
 export interface HomeData {

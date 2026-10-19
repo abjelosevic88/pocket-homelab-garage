@@ -28,16 +28,16 @@ Base path `/api/v1`. JSON in and out. Authenticate with the session cookie (brow
 | GET | `/vehicles/{id}/trips` | Pocket Travel trips with this vehicle's cost during each |
 
 ### Records (service / repair / upgrade / expense)
-`GET /vehicles/{id}/records?kind=service,repair&q=&from=&to=&limit=` · `POST` · `GET/PUT/DELETE /records/{rid}` · `POST /records/{rid}/firefly` (create the withdrawal in Firefly) · `POST /records/{rid}/money` (book it in Pocket Money, `{money_account?, money_category?}`).
+`GET /vehicles/{id}/records?kind=service,repair&q=&from=&to=&limit=` · `POST` · `GET/PUT/DELETE /records/{rid}` · `POST /records/{rid}/money` (book it in Pocket Money, `{money_account?, money_category?}`).
 
-Fields: `kind`, `category`, `date`, `odometer` (null = none), `description`, `notes`, `vendor`, `cost`, `currency`, `fx_rate`, `parts: [{name, qty, cost, part_no, inventory_id, link}]`, `tags`. Response adds `cost_home` (vehicle currency), `source`, `firefly_id`, `money_tx_id`.
+Fields: `kind`, `category`, `date`, `odometer` (null = none), `description`, `notes`, `vendor`, `cost`, `currency`, `fx_rate`, `parts: [{name, qty, cost, part_no, inventory_id, link}]`, `tags`. Response adds `cost_home` (vehicle currency), `source`, `money_tx_id`.
 
 **Pocket Inventory.** A part with `inventory_id` (picked from Pocket Inventory) comes off the person's shelf when the record is created, an edit of `parts` takes or returns the difference, deleting the record puts it back (setting `inventory_take`, on by default). The movement's note is `Pocket Garage: <vehicle> · <description>`. Failures don't fail the save: the response carries `inventory_error`.
 
 **Pocket Money.** Create and update (records, fill-ups, reminder *done* and plan *done*) take `money` (book it; absent = the person's `money_enabled` setting), `money_account` and `money_category`. The transaction goes into the Money of whoever logs it. A failed booking does not fail the save: the response carries `money_error`. Later edits to date, cost, currency, description, vendor (fuel: station, volume) update the transaction, a cost of 0 removes it, and deleting the record or fill-up deletes it. A transaction deleted in Money unlinks quietly.
 
 ### Fuel
-`GET /vehicles/{id}/fuel?q=` · `POST` · `GET/PUT/DELETE /fuel/{fid}` · `POST /fuel/{fid}/firefly` · `POST /fuel/{fid}/money`.
+`GET /vehicles/{id}/fuel?q=` · `POST` · `GET/PUT/DELETE /fuel/{fid}` · `POST /fuel/{fid}/money`.
 
 Fields: `date`, `odometer`, `volume`, `cost` (or `price_per`), `currency`, `full_tank`, `missed`, `station`, `grade`, `soc_start`, `soc_end`, `lat`, `lng`, `notes`, `tags`. Response adds `distance`, `economy` (volume per 100 distance units over the stretch ending here), `price_per`, `cost_per_km`.
 
@@ -55,14 +55,11 @@ Fields: `title`, `notes`, `kind` (what "done" logs; `none` for a plain reminder)
 ### Integrations
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/vehicles/{id}/firefly/sync` | pull the tag; returns `{fetched, matched, created, unmatched}` |
-| GET | `/vehicles/{id}/firefly/unmatched` | fuel-looking Firefly rows with no fill-up here |
-| GET | `/firefly/tags` · `/firefly/accounts` · `/firefly/categories` | |
 | GET | `/money?vehicle=` | `{connected, via: core\|token, error, enabled, offer, core, url, accounts, default_account}`: whether forms offer the option and where it books |
 | GET | `/money/categories?account=` | expense categories usable on that Money account |
 | POST | `/vehicles/{id}/dawarich/sync` · GET `/dawarich/days?from=&to=` | |
 | GET | `/inventory/search?q=` | the person's Pocket Inventory items `{items, url}` (through a Core link, or the token in Settings); `{items: [], error}` when not connected |
-| POST | `/integrations/test` | `{which: money|firefly|dawarich|notify|travel|inventory|lubelogger, url, key, username, password, format}` |
+| POST | `/integrations/test` | `{which: money|dawarich|notify|travel|inventory|lubelogger, url, key, username, password, format}` |
 | POST | `/notify/test` · `/notify/run?force=1` | |
 | POST | `/import/lubelogger/vehicles` · `/import/lubelogger` | `{url, username, password, currency, vehicles:[ids]}` |
 | POST | `/import/vehicle` | a JSON backup |
