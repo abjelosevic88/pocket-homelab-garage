@@ -31,7 +31,7 @@ var moneyScopes = []string{"accounts:read", "transactions:write"}
 // moneyLink is how Garage reaches one person's Money.
 type moneyLink struct {
 	client *money.Client
-	via    string // core | token
+	via    string // core | direct
 	public string // what a browser opens
 }
 
@@ -52,7 +52,13 @@ func (s *Server) moneyFor(ctx context.Context, u *store.User) (*moneyLink, error
 		return nil, errors.New("nobody to book for")
 	}
 	st := s.settingsFor(ctx, u.ID)
-	if st.MoneyToken != "" {
+	switch connMode(st.MoneyMode, st.MoneyToken) {
+	case modeOff:
+		return nil, errors.New("Pocket Money is switched off in Settings → Integrations")
+	case modeDirect:
+		if st.MoneyToken == "" {
+			return nil, errors.New("Pocket Money is set to a direct connection but has no token: add one in Settings → Integrations, or switch to Pocket Core")
+		}
 		base := st.MoneyURL
 		if base == "" {
 			base = s.resolveSibling(ctx, "money")
@@ -60,10 +66,10 @@ func (s *Server) moneyFor(ctx context.Context, u *store.User) (*moneyLink, error
 		if base == "" {
 			return nil, errors.New("set the Pocket Money URL in Settings → Integrations")
 		}
-		return &moneyLink{client: money.New(base, st.MoneyToken, 20*time.Second), via: "token", public: base}, nil
+		return &moneyLink{client: money.New(base, st.MoneyToken, 20*time.Second), via: modeDirect, public: base}, nil
 	}
 	if !s.core.Configured() {
-		return nil, errors.New("Pocket Money is not connected: no Pocket Core on this box and no Money token in Settings")
+		return nil, errors.New("Pocket Money through Pocket Core: there is no Pocket Core on this box; use a direct connection")
 	}
 	tok, err := s.core.ActAs(ctx, u.Email, "money", moneyScopes...)
 	if err != nil {

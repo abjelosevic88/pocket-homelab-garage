@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { APIToken, Settings as SettingsT, User } from '../lib/types'
+import type { APIToken, ConnMode, Settings as SettingsT, User } from '../lib/types'
 import { DATE_FORMATS, TIME_FORMATS, fmtBytes, fmtDateTime, type DateFormat, type TimeFormat } from '../lib/format'
 import { ECON_OPTIONS, VOL_OPTIONS } from '../lib/units'
 import { Card, Confirm, Field, Loading, Modal, PageHeader, Segmented, Tabs, useAsync, useToast } from '../components/ui'
@@ -98,12 +98,11 @@ function Integrations() {
     try { const r = await api.post<{ ok: boolean; message?: string; error?: string }>(`${V1}/integrations/test`, { which, url, key, ...extra }); setTest(t => ({ ...t, [which]: r.ok ? `✓ ${r.message}` : `✕ ${r.error}` })) } catch (e) { setTest(t => ({ ...t, [which]: `✕ ${(e as Error).message}` })) }
   }
   const status = (which: string) => <span className={`small ${test[which]?.startsWith('✓') ? 'ok' : test[which]?.startsWith('✕') ? 'bad' : 'muted'}`}>{test[which]}</span>
-  const viaBadge = (via: string) => <span className={`badge ${via ? 'cat' : ''}`}>{via === 'core' ? 'connected through Pocket Core' : via === 'token' ? 'connected with a token' : 'not connected'}</span>
   const badge = (on: boolean) => <span className={`badge ${on ? 'cat' : ''}`}>{on ? 'connected' : 'not set'}</span>
   const notifyRun = async () => { try { const r = await api.post<{ sent: number }>(`${V1}/notify/run?force=1`); toast(`${r.sent} message${r.sent === 1 ? '' : 's'} sent`) } catch (e) { toast((e as Error).message, 'err') } }
   return (
     <div className="grid" style={{ gap: 16 }}>
-      <PocketMoneyCard f={f} setF={setF} run={run} status={status} />
+      <PocketMoneyCard f={f} setF={setF} run={run} status={status} save={save} />
       <Card title="💶 Firefly III" actions={badge(f.firefly_configured)}>
         <p className="muted small">What the car really costs. Tag the vehicle's withdrawals in Firefly (e.g. <code>skoda</code>) and set that tag on the vehicle. Rows matching a fill-up or record by date and amount are linked; the rest come in as expenses. Synced every 30 minutes and on demand.</p>
         <div className="grid" style={{ gap: 12 }}>
@@ -139,60 +138,95 @@ function Integrations() {
           <div className="row"><button className="btn sm" onClick={() => run('notify', f.notify_url, '', { format: f.notify_format })} disabled={!f.notify_url}>Send a test</button>{f.notify_configured && <button className="btn sm" onClick={notifyRun}>Push everything due now</button>}{status('notify')}</div>
         </div>
       </Card>
-      <Card title="🧳 Pocket Travel" actions={viaBadge(f.travel_via)}>
-        <p className="muted small">Fill-ups and costs that fall inside a trip show up on the vehicle overview per trip, with the kilometres driven. With Pocket Core on the box there is nothing to fill in: your own trips come through Core. A token from Pocket Travel (Settings → API tokens) entered here takes priority; clear it to go back to Core.</p>
-        <div className="grid" style={{ gap: 12 }}>
-          <div className="two-col tight">
-            <Field label="URL"><input value={f.travel_url} onChange={e => setF({ ...f, travel_url: e.target.value })} placeholder="http://host.docker.internal:8174" /></Field>
-            <Field label="API token"><input value={f.travel_token} onChange={e => setF({ ...f, travel_token: e.target.value })} autoComplete="off" /></Field>
-          </div>
-          <Field label="Public URL (optional)" help="What the browser opens for trip links when the URL above is internal (e.g. host.docker.internal)."><input value={f.travel_public_url} onChange={e => setF({ ...f, travel_public_url: e.target.value })} placeholder="https://travel.example.com" /></Field>
-          <div className="row"><button className="btn sm" onClick={() => run('travel', f.travel_url, f.travel_token)} >Test connection</button>{status('travel')}</div>
-        </div>
+      <Card title="🧳 Pocket Travel" actions={connBadge(f.travel_mode, f.travel_via)}>
+        <p className="muted small">Fill-ups and costs that fall inside a trip show up on the vehicle overview per trip, with the kilometres driven.</p>
+        <Connection app="Pocket Travel" mode={f.travel_mode} via={f.travel_via} detail={f.travel_detail} core={f.core_configured} hasToken={!!f.travel_token}
+          onMode={m => save({ travel_mode: m })} onDisconnect={() => save({ travel_url: '', travel_token: '', travel_public_url: '' })}
+          test={<><button className="btn sm" onClick={() => run('travel', f.travel_url, f.travel_token)}>Test connection</button>{status('travel')}</>}
+          direct={<>
+            <div className="two-col tight">
+              <Field label="URL"><input value={f.travel_url} onChange={e => setF({ ...f, travel_url: e.target.value })} placeholder="http://host.docker.internal:8174" /></Field>
+              <Field label="API token" help="Pocket Travel → Settings → API tokens"><input value={f.travel_token} onChange={e => setF({ ...f, travel_token: e.target.value })} autoComplete="off" /></Field>
+            </div>
+            <Field label="Public URL (optional)" help="What the browser opens for trip links when the URL above is internal (e.g. host.docker.internal)."><input value={f.travel_public_url} onChange={e => setF({ ...f, travel_public_url: e.target.value })} placeholder="https://travel.example.com" /></Field>
+          </>} />
       </Card>
-      <Card title="📦 Pocket Inventory" actions={viaBadge(f.inventory_via)}>
-        <p className="muted small">Parts and fluids on the shelf. When you list parts on a record, the name field suggests your inventory items. With Pocket Core on the box there is nothing to fill in; a token from Pocket Inventory (Settings → API tokens) entered here takes priority, clear it to go back to Core.</p>
-        <div className="grid" style={{ gap: 12 }}>
-          <div className="two-col tight">
+      <Card title="📦 Pocket Inventory" actions={connBadge(f.inventory_mode, f.inventory_via)}>
+        <p className="muted small">Parts and fluids on the shelf. When you list parts on a record, the name field suggests your inventory items.</p>
+        <Connection app="Pocket Inventory" mode={f.inventory_mode} via={f.inventory_via} detail={f.inventory_detail} core={f.core_configured} hasToken={!!f.inventory_token}
+          onMode={m => save({ inventory_mode: m })} onDisconnect={() => save({ inventory_url: '', inventory_token: '' })}
+          test={<><button className="btn sm" onClick={() => run('inventory', f.inventory_url, f.inventory_token)}>Test connection</button>{status('inventory')}</>}
+          direct={<div className="two-col tight">
             <Field label="URL"><input value={f.inventory_url} onChange={e => setF({ ...f, inventory_url: e.target.value })} placeholder="http://host.docker.internal:8170" /></Field>
-            <Field label="API token"><input value={f.inventory_token} onChange={e => setF({ ...f, inventory_token: e.target.value })} autoComplete="off" /></Field>
-          </div>
-          <div className="row"><button className="btn sm" onClick={() => run('inventory', f.inventory_url, f.inventory_token)} >Test connection</button>{status('inventory')}</div>
-          <label className="row"><input type="checkbox" checked={f.inventory_take} onChange={e => setF({ ...f, inventory_take: e.target.checked })} style={{ width: 'auto' }} /> Take parts picked from Pocket Inventory off the shelf when the work is logged (edits adjust the difference, deleting the record puts them back)</label>
-        </div>
+            <Field label="API token" help="Pocket Inventory → Settings → API tokens"><input value={f.inventory_token} onChange={e => setF({ ...f, inventory_token: e.target.value })} autoComplete="off" /></Field>
+          </div>} />
+        {f.inventory_mode !== 'off' && <label className="row mt"><input type="checkbox" checked={f.inventory_take} onChange={e => setF({ ...f, inventory_take: e.target.checked })} style={{ width: 'auto' }} /> Take parts picked from Pocket Inventory off the shelf when the work is logged (edits adjust the difference, deleting the record puts them back)</label>}
       </Card>
       <div><button className="btn primary" onClick={() => save()} disabled={busy}>Save integrations</button></div>
     </div>
   )
 }
 
-function PocketMoneyCard({ f, setF, run, status }: { f: SettingsT; setF: (s: SettingsT) => void; run: (which: string, url: string, key: string) => void; status: (which: string) => React.ReactNode }) {
-  const ms = useMoneyStatus()
+/**
+ * One Pocket app connection: Pocket Core, Direct (URL + token) or Off, with
+ * what it actually is right now. The mode saves at once; Disconnect removes
+ * the saved URL and token.
+ */
+function Connection({ app, mode, via, detail, core, onMode, onDisconnect, hasToken, test, direct }: {
+  app: string; mode: ConnMode; via: string; detail: string; core: boolean; onMode: (m: ConnMode) => void; onDisconnect: () => void
+  hasToken: boolean; test: React.ReactNode; direct: React.ReactNode
+}) {
+  const ok = via !== ''
+  const line = mode === 'off' ? `Off: Garage does not talk to ${app}.`
+    : mode === 'core' ? (ok ? `Connected through Pocket Core, as you. Nothing to fill in; switch it off for yourself in Pocket Core → Settings → Apps acting for me.` : `Not connected: ${detail}.`)
+    : (ok ? `Direct connection with your own ${app} URL and token; use Test connection to check it.` : `Not connected: ${detail || 'add the URL and a token'}.`)
+  return (
+    <div className="conn-block">
+      <div className="conn-mode">
+        <Segmented size="sm" value={mode} onChange={m => onMode(m as ConnMode)} options={[
+          { value: 'core', label: 'Pocket Core', title: core ? 'Through Pocket Core: per person, nothing to paste' : 'There is no Pocket Core on this box' },
+          { value: 'direct', label: 'Direct', title: 'Your own URL and API token' },
+          { value: 'off', label: 'Off' },
+        ]} />
+      </div>
+      <div className={`conn-status ${mode === 'off' ? '' : ok ? 'ok' : 'bad'}`}><span className="dot" />{line}</div>
+      {mode === 'direct' && <>
+        {direct}
+        <div className="row wrap">{test}{hasToken && <button className="btn sm ghost danger-text" onClick={onDisconnect} title="Remove the saved URL and token">Disconnect</button>}</div>
+      </>}
+      {mode === 'core' && <div className="row wrap">{test}</div>}
+    </div>
+  )
+}
+
+export const connBadge = (mode: ConnMode, via: string) => mode === 'off' ? <span className="badge">off</span>
+  : via ? <span className="badge cat">{via === 'core' ? 'Pocket Core' : 'direct'}</span>
+  : <span className="badge warn">not connected</span>
+
+function PocketMoneyCard({ f, setF, run, status, save }: { f: SettingsT; setF: (s: SettingsT) => void; run: (which: string, url: string, key: string) => void; status: (which: string) => React.ReactNode; save: (patch?: Partial<SettingsT>) => Promise<void> }) {
+  const ms = useMoneyStatus(undefined, `${f.money_mode}:${f.money_via}`)
   const [cats, setCats] = useState<{ id: number; full_name: string; name: string }[]>([])
   const acct = f.money_account || ms?.default_account || 0
   useEffect(() => { if (ms?.connected) api.get<typeof cats>(`${V1}/money/categories${acct ? `?account=${acct}` : ''}`).then(setCats).catch(() => setCats([])) }, [ms?.connected, acct])
-  const badge = !ms ? null : ms.connected ? <span className="badge cat">{ms.via === 'core' ? 'connected through Pocket Core' : 'connected with a token'}</span> : <span className="badge">not connected</span>
   const catOpts = cats.map(c => ({ value: String(c.id), label: c.full_name || c.name }))
   return (
-    <Card title="👛 Pocket Money" actions={badge}>
-      <p className="muted small">Every fill-up, service, repair or expense you log can become an expense in your Pocket Money, with the vehicle's tag, a link back here and the cost in its own currency. Edits and deletes here follow it there. {ms?.core ? <>On this box it goes through <b>Pocket Core</b>: no token is needed, and you can switch the link off for yourself in Pocket Core (Settings → Apps acting for me).</> : <>Without Pocket Core, give it your Money URL and a token from Pocket Money → Settings → API tokens.</>}</p>
-      {ms && !ms.connected && ms.error && <div className="callout mb small">{ms.error}</div>}
-      <div className="grid" style={{ gap: 12 }}>
+    <Card title="👛 Pocket Money" actions={connBadge(f.money_mode, f.money_via)}>
+      <p className="muted small">Every fill-up, service, repair or expense you log can become an expense in your Pocket Money, with the vehicle's tag, a link back here and the cost in its own currency. Edits and deletes here follow it there.</p>
+      <Connection app="Pocket Money" mode={f.money_mode} via={f.money_via} detail={f.money_detail} core={f.core_configured} hasToken={!!f.money_token}
+        onMode={m => save({ money_mode: m })} onDisconnect={() => save({ money_url: '', money_token: '' })}
+        test={<><button className="btn sm" onClick={() => run('money', f.money_url, f.money_token)}>Test connection</button>{status('money')}</>}
+        direct={<div className="two-col tight">
+          <Field label="URL" help="Inside Docker use http://host.docker.internal:PORT."><input value={f.money_url} onChange={e => setF({ ...f, money_url: e.target.value })} placeholder="http://host.docker.internal:8178" /></Field>
+          <Field label="API token" help="Pocket Money → Settings → API tokens"><input value={f.money_token} onChange={e => setF({ ...f, money_token: e.target.value })} autoComplete="off" placeholder="pm_…" /></Field>
+        </div>} />
+      {f.money_mode !== 'off' && <div className="grid mt" style={{ gap: 12 }}>
         <label className="row"><input type="checkbox" checked={f.money_enabled} onChange={e => setF({ ...f, money_enabled: e.target.checked })} style={{ width: 'auto' }} /> Offer “Create a transaction in Pocket Money” when adding a cost, ticked by default</label>
         {ms?.connected && <div className="three-col tight">
           <Field label="Book on" help="Each vehicle remembers the last account you picked on its forms."><Select value={String(f.money_account || '')} onChange={a => setF({ ...f, money_account: Number(a) || 0 })} options={ms.accounts.map(a => ({ value: String(a.id), label: a.name, hint: a.currency }))} placeholder={ms.accounts.find(a => a.id === ms.default_account)?.name || 'Choose…'} clearLabel="Everyday account" /></Field>
           <Field label="Category for fuel" help="Empty: a category named like gorivo / fuel."><Select value={String(f.money_category_fuel || '')} onChange={c => setF({ ...f, money_category_fuel: Number(c) || 0 })} options={catOpts} placeholder="By name" clearLabel="By name" /></Field>
           <Field label="Category for everything else" help="Empty: a category named like auto / car."><Select value={String(f.money_category || '')} onChange={c => setF({ ...f, money_category: Number(c) || 0 })} options={catOpts} placeholder="By name" clearLabel="By name" /></Field>
         </div>}
-        <details>
-          <summary className="small">{ms?.core ? 'Use a Money token instead of Pocket Core' : 'Money URL and token'}</summary>
-          <div className="two-col tight mt-sm">
-            <Field label="URL" help={ms?.core ? 'Empty: found through Pocket Core.' : 'Inside Docker use http://host.docker.internal:PORT.'}><input value={f.money_url} onChange={e => setF({ ...f, money_url: e.target.value })} placeholder="http://host.docker.internal:8178" /></Field>
-            <Field label="API token" help="A token wins over Pocket Core. Clear it to go back."><input value={f.money_token} onChange={e => setF({ ...f, money_token: e.target.value })} autoComplete="off" placeholder="pm_…" /></Field>
-          </div>
-        </details>
-        <div className="row"><button className="btn sm" onClick={() => run('money', f.money_url, f.money_token)}>Test connection</button>{status('money')}</div>
-      </div>
+      </div>}
     </Card>
   )
 }

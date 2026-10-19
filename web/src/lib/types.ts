@@ -11,7 +11,10 @@ export interface Settings {
   notify_url: string; notify_format: string; notify_hour: number; notify_digest: boolean; notify_configured: boolean
   travel_url: string; travel_public_url: string; travel_token: string; travel_configured: boolean
   inventory_url: string; inventory_token: string; inventory_configured: boolean; inventory_take: boolean
-  travel_via: '' | 'core' | 'token'; inventory_via: '' | 'core' | 'token'
+  core_configured: boolean
+  travel_mode: ConnMode; travel_via: '' | 'core' | 'direct'; travel_detail: string
+  inventory_mode: ConnMode; inventory_via: '' | 'core' | 'direct'; inventory_detail: string
+  money_mode: ConnMode; money_via: '' | 'core' | 'direct'; money_detail: string
   money_enabled: boolean; money_url: string; money_token: string; money_account: number; money_category_fuel: number; money_category: number
   max_upload_bytes: number; setup_complete: boolean; base_url: string
 }
@@ -104,3 +107,6 @@ export interface MoneyStatus {
   connected: boolean; via: '' | 'core' | 'token'; error: string; enabled: boolean; offer: boolean; core: boolean; url: string
   accounts: { id: number; name: string; currency: string; kind: string; everyday: boolean }[]; default_account: number
 }
+
+/** How Garage reaches a sibling Pocket app. */
+export type ConnMode = 'core' | 'direct' | 'off'

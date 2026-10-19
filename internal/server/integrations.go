@@ -44,10 +44,14 @@ func mask(s string) string {
 }
 
 func (s *Server) publicSettings(ctx context.Context, u *store.User, st store.Settings) map[string]any {
-	travelVia := s.siblingVia(ctx, u, "travel", st.TravelToken, travelScopes)
-	inventoryVia := s.siblingVia(ctx, u, "inventory", st.InventoryToken, inventoryScopes)
+	travelMode, travelVia, travelDetail := s.connStatus(ctx, u, "travel", "Pocket Travel", st.TravelMode, st.TravelToken, travelScopes)
+	invMode, inventoryVia, invDetail := s.connStatus(ctx, u, "inventory", "Pocket Inventory", st.InventoryMode, st.InventoryToken, inventoryScopes)
+	moneyMode, moneyVia, moneyDetail := s.connStatus(ctx, u, "money", "Pocket Money", st.MoneyMode, st.MoneyToken, moneyScopes)
 	return map[string]any{
-		"travel_via": travelVia, "inventory_via": inventoryVia, "inventory_take": st.InventoryTake,
+		"core_configured": s.core.Configured(),
+		"travel_mode":     travelMode, "travel_via": travelVia, "travel_detail": travelDetail,
+		"inventory_mode": invMode, "inventory_via": inventoryVia, "inventory_detail": invDetail, "inventory_take": st.InventoryTake,
+		"money_mode": moneyMode, "money_via": moneyVia, "money_detail": moneyDetail,
 		"title": st.Title, "home_currency": st.HomeCurrency, "date_format": st.DateFormat, "time_format": st.TimeFormat,
 		"distance_unit": st.DistanceUnit, "volume_unit": st.VolumeUnit, "economy_unit": st.EconomyUnit, "fx_auto": st.FXAuto, "fx_provider": s.cfg.FXProvider,
 		"firefly_url": st.FireflyURL, "firefly_token": mask(st.FireflyToken), "firefly_configured": st.FireflyURL != "" && st.FireflyToken != "",
@@ -155,6 +159,14 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	secret("travel_token", &cur.TravelToken, in.TravelToken)
 	url("inventory_url", &cur.InventoryURL, in.InventoryURL)
 	secret("inventory_token", &cur.InventoryToken, in.InventoryToken)
+	for k, dst := range map[string]*string{"travel_mode": &cur.TravelMode, "inventory_mode": &cur.InventoryMode, "money_mode": &cur.MoneyMode} {
+		if keys[k] {
+			v := map[string]string{"travel_mode": in.TravelMode, "inventory_mode": in.InventoryMode, "money_mode": in.MoneyMode}[k]
+			if v == modeCore || v == modeDirect || v == modeOff {
+				*dst = v
+			}
+		}
+	}
 	if keys["inventory_take"] {
 		cur.InventoryTake = in.InventoryTake
 	}
@@ -246,14 +258,17 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 	case "travel", "inventory":
 		name := map[string]string{"travel": "Pocket Travel", "inventory": "Pocket Inventory"}[in.Which]
 		saved := map[string][2]string{"travel": {st.TravelURL, st.TravelToken}, "inventory": {st.InventoryURL, st.InventoryToken}}[in.Which]
+		mode := map[string]string{"travel": st.TravelMode, "inventory": st.InventoryMode}[in.Which]
+		typed := in.Key != "" && !strings.Contains(in.Key, "••")
 		var v string
-		if tok := keyOr(saved[1]); tok != "" {
+		// a token typed into the form is tried as is; otherwise the saved mode decides
+		if tok := keyOr(saved[1]); tok != "" && (typed || connMode(mode, saved[1]) == modeDirect) {
 			base := urlOr(saved[0])
 			if base == "" {
 				base = s.resolveSibling(ctx, in.Which)
 			}
 			v, err = pocket.New(base, tok, 15*time.Second).Health(ctx)
-			msg = name + " " + v + " with your token"
+			msg = name + " " + v + ", direct connection"
 		} else {
 			u := userFrom(r.Context())
 			var conn *siblingConn
@@ -269,13 +284,14 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 		}
 	case "money":
 		var accts []money.Account
-		if tok := keyOr(st.MoneyToken); tok != "" {
+		typed := in.Key != "" && !strings.Contains(in.Key, "••")
+		if tok := keyOr(st.MoneyToken); tok != "" && (typed || connMode(st.MoneyMode, st.MoneyToken) == modeDirect) {
 			base := urlOr(st.MoneyURL)
 			if base == "" {
 				base = s.resolveSibling(ctx, "money")
 			}
 			accts, err = money.New(base, tok, 15*time.Second).Accounts(ctx)
-			msg = fmt.Sprintf("Pocket Money reachable with your token, %d accounts to book on", len(accts))
+			msg = fmt.Sprintf("Pocket Money reachable directly, %d accounts to book on", len(accts))
 		} else {
 			var ml *moneyLink
 			if ml, err = s.moneyFor(ctx, userFrom(r.Context())); err == nil {

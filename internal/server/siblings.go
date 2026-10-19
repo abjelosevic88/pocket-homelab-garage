@@ -25,10 +25,30 @@ var (
 	inventoryScopes = []string{"items:read", "items:adjust"}
 )
 
+// Connection modes, chosen per person and per app in Settings.
+const (
+	modeCore   = "core"
+	modeDirect = "direct"
+	modeOff    = "off"
+)
+
+// connMode is the mode in effect: the chosen one, else direct when a token
+// was entered (how it always worked), else Pocket Core.
+func connMode(mode, token string) string {
+	switch mode {
+	case modeCore, modeDirect, modeOff:
+		return mode
+	}
+	if token != "" {
+		return modeDirect
+	}
+	return modeCore
+}
+
 // siblingConn is how Garage reaches one person's Travel or Inventory.
 type siblingConn struct {
 	client *pocket.Client
-	via    string // token | core
+	via    string // direct | core
 	public string // what a browser opens
 }
 
@@ -52,11 +72,17 @@ func linkReason(app, reason string) string {
 	return ""
 }
 
-func (s *Server) siblingFor(ctx context.Context, u *store.User, slug, app string, scopes []string, url, token, public string) (*siblingConn, error) {
+func (s *Server) siblingFor(ctx context.Context, u *store.User, slug, app string, scopes []string, mode, url, token, public string) (*siblingConn, error) {
 	if u == nil {
 		return nil, errors.New("nobody to act for")
 	}
-	if token != "" {
+	switch connMode(mode, token) {
+	case modeOff:
+		return nil, fmt.Errorf("%s is switched off in Settings → Integrations", app)
+	case modeDirect:
+		if token == "" {
+			return nil, fmt.Errorf("%s is set to a direct connection but has no token: add one in Settings → Integrations, or switch to Pocket Core", app)
+		}
 		base := url
 		if base == "" {
 			base = s.resolveSibling(ctx, slug)
@@ -64,10 +90,10 @@ func (s *Server) siblingFor(ctx context.Context, u *store.User, slug, app string
 		if base == "" {
 			return nil, fmt.Errorf("set the %s URL in Settings → Integrations", app)
 		}
-		return &siblingConn{client: pocket.New(base, token, 15*time.Second), via: "token", public: firstNonEmpty(public, base)}, nil
+		return &siblingConn{client: pocket.New(base, token, 15*time.Second), via: modeDirect, public: firstNonEmpty(public, base)}, nil
 	}
 	if !s.core.Configured() {
-		return nil, fmt.Errorf("%s is not connected: no Pocket Core on this box and no token in Settings", app)
+		return nil, fmt.Errorf("%s through Pocket Core: there is no Pocket Core on this box; use a direct connection", app)
 	}
 	tok, err := s.core.ActAs(ctx, u.Email, slug, scopes...)
 	if err != nil {
@@ -84,27 +110,45 @@ func (s *Server) siblingFor(ctx context.Context, u *store.User, slug, app string
 
 func (s *Server) travelFor(ctx context.Context, u *store.User) (*siblingConn, error) {
 	st := s.settingsFor(ctx, u.ID)
-	return s.siblingFor(ctx, u, "travel", "Pocket Travel", travelScopes, st.TravelURL, st.TravelToken, st.TravelPublicURL)
+	return s.siblingFor(ctx, u, "travel", "Pocket Travel", travelScopes, st.TravelMode, st.TravelURL, st.TravelToken, st.TravelPublicURL)
 }
 
 func (s *Server) inventoryFor(ctx context.Context, u *store.User) (*siblingConn, error) {
 	st := s.settingsFor(ctx, u.ID)
-	return s.siblingFor(ctx, u, "inventory", "Pocket Inventory", inventoryScopes, st.InventoryURL, st.InventoryToken, "")
+	return s.siblingFor(ctx, u, "inventory", "Pocket Inventory", inventoryScopes, st.InventoryMode, st.InventoryURL, st.InventoryToken, "")
 }
 
-// siblingVia says how a person is connected to Travel or Inventory, without
-// issuing anything: "token", "core" or "" (not connected).
-func (s *Server) siblingVia(ctx context.Context, u *store.User, slug, token string, scopes []string) string {
-	if token != "" {
-		return "token"
+// connStatus says, without issuing anything, how a person reaches a Pocket
+// app: the mode in effect, whether it works ("core" / "direct" / "" for
+// not connected) and why not.
+func (s *Server) connStatus(ctx context.Context, u *store.User, slug, app, mode, token string, scopes []string) (eff, via, detail string) {
+	eff = connMode(mode, token)
+	switch eff {
+	case modeOff:
+		return eff, "", "switched off"
+	case modeDirect:
+		if token == "" {
+			return eff, "", "no token yet"
+		}
+		return eff, modeDirect, ""
 	}
 	if u == nil || !s.core.Configured() {
-		return ""
+		return eff, "", "there is no Pocket Core on this box"
 	}
-	if on, _ := s.core.LinkOn(ctx, u.Email, slug, scopes...); on {
-		return "core"
+	on, reason := s.core.LinkOn(ctx, u.Email, slug, scopes...)
+	if on {
+		return eff, modeCore, ""
 	}
-	return ""
+	if t := linkReason(app, reason); t != "" {
+		return eff, "", t
+	}
+	return eff, "", reason
+}
+
+// siblingVia is connStatus's "does it work" part.
+func (s *Server) siblingVia(ctx context.Context, u *store.User, slug, mode, token string, scopes []string) string {
+	_, via, _ := s.connStatus(ctx, u, slug, slug, mode, token, scopes)
+	return via
 }
 
 // ---- parts off the shelf ----

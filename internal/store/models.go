@@ -357,6 +357,10 @@ type Settings struct {
 	InventoryURL    string `json:"inventory_url"`
 	InventoryToken  string `json:"inventory_token"`
 	InventoryTake   bool   `json:"inventory_take"` // parts picked from Pocket Inventory come off the shelf
+	// How Garage reaches each Pocket app: core | direct | off ("" = direct when a token is set, else core).
+	TravelMode    string `json:"travel_mode"`
+	InventoryMode string `json:"inventory_mode"`
+	MoneyMode     string `json:"money_mode"`
 	// Pocket Money: through a Pocket Core link, or a Money URL + token without Core.
 	MoneyEnabled      bool   `json:"money_enabled"` // offer "Create a transaction" (ticked) when adding costs
 	MoneyURL          string `json:"money_url"`

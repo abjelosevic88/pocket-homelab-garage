@@ -156,7 +156,7 @@ func TestTravelAndInventoryThroughCore(t *testing.T) {
 	p.do(p.aTok, "PUT", "/api/v1/settings", map[string]any{"travel_url": travel.URL, "travel_token": "manual-travel-token"})
 	_, body = p.do(p.aTok, "GET", "/api/v1/settings", nil)
 	_ = json.Unmarshal([]byte(body), &st)
-	if st["travel_via"] != "token" {
+	if st["travel_via"] != "direct" || st["travel_mode"] != "direct" {
 		t.Fatalf("manual token should win: %s", body)
 	}
 	p.do(p.aTok, "GET", base+"/trips", nil)
@@ -165,6 +165,31 @@ func TestTravelAndInventoryThroughCore(t *testing.T) {
 	mu.Unlock()
 	if last != "Bearer manual-travel-token" {
 		t.Fatalf("travel called with %q", last)
+	}
+
+	// Choosing Pocket Core ignores the saved token (it stays, for switching back).
+	p.do(p.aTok, "PUT", "/api/v1/settings", map[string]any{"travel_mode": "core"})
+	p.do(p.aTok, "GET", base+"/trips", nil)
+	mu.Lock()
+	last = travelAuth[len(travelAuth)-1]
+	mu.Unlock()
+	if last != "Bearer pcx_travel_owner@example.com" {
+		t.Fatalf("core mode called travel with %q", last)
+	}
+	// Off: no connection at all, and Settings says so.
+	p.do(p.aTok, "PUT", "/api/v1/settings", map[string]any{"travel_mode": "off"})
+	if _, body := p.do(p.aTok, "GET", base+"/trips", nil); strings.Contains(body, "Rome") {
+		t.Fatalf("off still reads trips: %s", body)
+	}
+	_, body = p.do(p.aTok, "GET", "/api/v1/settings", nil)
+	_ = json.Unmarshal([]byte(body), &st)
+	if st["travel_mode"] != "off" || st["travel_via"] != "" || st["travel_detail"] != "switched off" || st["travel_token"] == "" {
+		t.Fatalf("off settings %s", body)
+	}
+	// Direct without a token says what is missing.
+	p.do(p.aTok, "PUT", "/api/v1/settings", map[string]any{"inventory_mode": "direct"})
+	if _, body := p.do(p.aTok, "GET", "/api/v1/inventory/search?q=oil", nil); !strings.Contains(body, "has no token") {
+		t.Fatalf("direct without token %s", body)
 	}
 
 	// The member has no link (Core says not in audience): no trips, no error page.

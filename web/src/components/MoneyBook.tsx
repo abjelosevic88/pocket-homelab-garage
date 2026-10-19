@@ -4,9 +4,9 @@ import type { MoneyStatus } from '../lib/types'
 import { Select } from './Select'
 
 /** Pocket Money status for the signed-in person; ?vehicle picks that vehicle's last account. */
-export function useMoneyStatus(vehicleId?: number) {
+export function useMoneyStatus(vehicleId?: number, refresh = '') {
   const [st, setSt] = useState<MoneyStatus | null>(null)
-  useEffect(() => { api.get<MoneyStatus>(`${V1}/money${vehicleId ? `?vehicle=${vehicleId}` : ''}`).then(setSt).catch(() => setSt(null)) }, [vehicleId])
+  useEffect(() => { api.get<MoneyStatus>(`${V1}/money${vehicleId ? `?vehicle=${vehicleId}` : ''}`).then(setSt).catch(() => setSt(null)) }, [vehicleId, refresh])
   return st
 }
 

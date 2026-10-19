@@ -578,3 +578,13 @@ html, body { overflow-x: hidden; }
 .part-name input { width: 100%; }
 .part-name .part-inv { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 14px; pointer-events: auto; cursor: help; }
 .part-name:has(.part-inv) input { padding-right: 30px; }
+
+/* Settings → Integrations: how Garage reaches a Pocket app */
+.conn-block { display: grid; gap: 12px; }
+.conn-mode { display: flex; }
+.conn-status { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--muted); padding: 8px 10px; border-radius: 8px; background: var(--surface-2); line-height: 1.4; }
+.conn-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; margin-top: 5px; }
+.conn-status.ok { color: var(--text); }
+.conn-status.ok .dot { background: var(--success, #16a34a); }
+.conn-status.bad .dot { background: var(--warning, #d97706); }
+.row.wrap { flex-wrap: wrap; }
