@@ -29,6 +29,8 @@ Everything is read from environment variables; every value has a default so a ba
 | `INVENTORY_URL` / `INVENTORY_TOKEN` | – | Pocket Inventory |
 | `LUBELOGGER_URL` / `LUBELOGGER_USERNAME` / `LUBELOGGER_PASSWORD` | – | Import everything once on the first start (while the database has no vehicles). `LUBELOGGER_IMPORT_ON_START=false` disables that. |
 | `USER_AGENT` | `PocketGarage/1.0 (…)` | Sent to the exchange-rate providers |
+| `CORE_URL` / `CORE_REGISTRATION_KEY` | – | [Pocket Core](https://git.bjelke.org/abjelosevic88/pocket-homelab-core): register on start (the key is needed once; the minted app token lives in `$DATA_DIR/core.token`), publish `garage.fuel_logged` / `garage.service_logged` / `garage.odometer_updated`, accept the tokens Core hands to paired phones, and resolve Pocket Money (Firefly API) / Travel / Inventory through Core when their `*_URL` is empty |
+| `CORE_APP_URL` | `BASE_URL` | How Core reaches this app for health checks (e.g. `http://host.docker.internal:8175`) |
 | `DEMO_DATA` | `false` | Seed a sample car and motorcycle on an empty database |
 
 ## Auth modes
