@@ -8,6 +8,7 @@ import { cleanNotes, fmtOdo } from '../../lib/units'
 import { Card, Confirm, Empty, Loading, Segmented, useAsync, useToast } from '../../components/ui'
 import { Money } from '../../components/Money'
 import { RecordModal } from '../../components/forms'
+import { Select } from '../../components/Select'
 import { useVehicle } from './ctx'
 
 export default function ServiceTab() {
@@ -31,7 +32,7 @@ export default function ServiceTab() {
       <div className="toolbar">
         <Segmented value={kind} onChange={setKind} options={[{ value: '', label: 'All' }, ...(meta?.record_kinds || []).map(k => ({ value: k, label: KIND_LABEL[k] }))]} size="sm" />
         <div className="search"><span className="ico">⌕</span><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search description, vendor, parts…" /></div>
-        <select value={year} onChange={e => setYear(e.target.value)}><option value="">All years</option>{years.map(y => <option key={y} value={y}>{y}</option>)}</select>
+        <Select ariaLabel="Year" value={year} onChange={setYear} options={years.map(y => ({ value: String(y), label: String(y) }))} placeholder="All years" clearLabel="All years" />
         <a className="btn sm" href={`${V1}/vehicles/${v.id}/export/records.csv?kind=${kind}`}>CSV</a>
         {canEdit && <button className="btn primary sm" onClick={() => setEdit('new')}>+ Log work</button>}
       </div>
