@@ -36,6 +36,15 @@ type Config struct {
 	AdminPassword        string
 	AdminName            string
 
+	// Sign in with an OpenID Connect provider. On a box with Pocket Core the
+	// app receives its client when it registers, so none of these are needed;
+	// explicit values win when set.
+	OIDCIssuer       string
+	OIDCClientID     string
+	OIDCClientSecret string
+	OIDCName         string // button label
+	OIDCAutoCreate   bool   // unknown verified emails get a member account
+
 	DefaultCurrency string
 	DistanceUnit    string // km | mi
 	VolumeUnit      string // l | gal_us | gal_uk
@@ -141,6 +150,12 @@ func Load() (*Config, error) {
 		AdminPassword:        env("ADMIN_PASSWORD", ""),
 		AdminName:            env("ADMIN_NAME", "Admin"),
 
+		OIDCIssuer:       strings.TrimRight(env("OIDC_ISSUER", ""), "/"),
+		OIDCClientID:     env("OIDC_CLIENT_ID", ""),
+		OIDCClientSecret: env("OIDC_CLIENT_SECRET", ""),
+		OIDCName:         env("OIDC_NAME", "single sign-on"),
+		OIDCAutoCreate:   envBool("OIDC_AUTO_CREATE", true),
+
 		DefaultCurrency: strings.ToUpper(env("DEFAULT_CURRENCY", "EUR")),
 		DistanceUnit:    strings.ToLower(env("DISTANCE_UNIT", "km")),
 		VolumeUnit:      strings.ToLower(env("VOLUME_UNIT", "l")),
@@ -178,6 +193,9 @@ func Load() (*Config, error) {
 	case "local", "proxy", "none":
 	default:
 		return nil, fmt.Errorf("AUTH_MODE must be one of local, proxy, none (got %q)", c.AuthMode)
+	}
+	if c.OIDCIssuer != "" && (c.OIDCClientID == "" || c.BaseURL == "") {
+		return nil, fmt.Errorf("OIDC_ISSUER needs OIDC_CLIENT_ID and BASE_URL (the callback is BASE_URL/api/v1/auth/oidc/callback)")
 	}
 	switch c.FXProvider {
 	case "auto", "frankfurter", "erapi", "none":

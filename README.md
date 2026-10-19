@@ -62,8 +62,8 @@ I kept the car in LubeLogger and liked the idea more than the app: the locale at
 | **Planner** | Kanban backlog → planned → in progress → testing → done, priority, estimate, target date, drag & drop, “log & finish”. |
 | **Notes & documents** | Pinned notes on the overview; files with kind and expiry (insurance, registration, inspection…) that warn 30 days ahead. |
 | **Reports** | Stacked costs per month (12 m / 24 m / 5 y), per-year table with km and cost per km, categories, stations, economy, price, odometer and Dawarich series. |
-| **Integrations** | Firefly III (tag sync every 30 min, push withdrawals, default account and category), Dawarich (timeline driving km), Apprise / ntfy / webhook, Pocket Travel (trips with fuel and km), Pocket Inventory (parts lookup), LubeLogger import, LubeLogger-compatible API, Homepage dashboard endpoint, Prometheus `/metrics`. With **Pocket Core** on the box: registers itself, publishes `garage.fuel_logged`, `garage.service_logged` and `garage.odometer_updated`, accepts paired-phone tokens, finds its siblings without `*_URL` settings. |
-| **Users & ops** | Built-in login (admin/member), SSO-proxy header, or no login on a trusted LAN. API tokens. SQLite backup from the UI/CLI/API, JSON export/import per vehicle. |
+| **Integrations** | Firefly III (tag sync every 30 min, push withdrawals, default account and category), Dawarich (timeline driving km), Apprise / ntfy / webhook, Pocket Travel (trips with fuel and km), Pocket Inventory (parts lookup), LubeLogger import, LubeLogger-compatible API, Homepage dashboard endpoint, Prometheus `/metrics`. With **Pocket Core** on the box: registers itself, publishes `garage.fuel_logged`, `garage.service_logged` and `garage.odometer_updated`, accepts paired-phone tokens, finds its siblings without `*_URL` settings, and shows “Sign in with Pocket Core” on the login page with no OIDC configuration at all. |
+| **Users & ops** | Built-in login (admin/member), OpenID Connect sign-in (Pocket Core, PocketID…), SSO-proxy header, or no login on a trusted LAN. API tokens. SQLite backup from the UI/CLI/API, JSON export/import per vehicle. |
 
 ## Run it
 

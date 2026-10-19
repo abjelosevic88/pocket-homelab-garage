@@ -18,6 +18,9 @@ Everything is read from environment variables; every value has a default so a ba
 | `SESSION_TTL` | `720h` | Cookie lifetime |
 | `SECURE_COOKIES` | `false` | Set `true` behind HTTPS |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` | – | Create the first admin on an empty database (otherwise the UI asks) |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | – | Sign in with an OpenID Connect provider (Pocket Core, PocketID, Authelia, Authentik, Keycloak…). Needs `BASE_URL`; the callback is `BASE_URL/api/v1/auth/oidc/callback`. On a box with Pocket Core none of these are needed — the app receives its client when it registers. |
+| `OIDC_NAME` | `single sign-on` | Button label: “Sign in with …” (“Pocket Core” for the client Core issued) |
+| `OIDC_AUTO_CREATE` | `true` | Give an unknown (verified) email a member account instead of refusing it; always on for the client Core issued, since Core already vouches for the person |
 | `DEFAULT_CURRENCY` | `EUR` | Home currency for totals and the default for new vehicles |
 | `DISTANCE_UNIT` | `km` | `km` or `mi` for new vehicles |
 | `VOLUME_UNIT` | `l` | `l`, `gal_us`, `gal_uk` |
@@ -35,7 +38,7 @@ Everything is read from environment variables; every value has a default so a ba
 
 ## Auth modes
 
-- **local** — accounts with email + password. The first account created becomes admin. Also used as Basic auth by the LubeLogger-compatible API.
+- **local** — accounts with email + password, plus “Sign in with …” when an OpenID Connect client is configured or issued by Pocket Core. The first account created becomes admin. Also used as Basic auth by the LubeLogger-compatible API.
 - **proxy** — trust a forward-auth proxy (Authelia, Authentik, Tinyauth…). Users are created on first visit. Keep `/api/*` and `/cal/*` outside the forward-auth rule if the phone app or a calendar needs them.
 - **none** — no login at all; one implicit admin. Only for a trusted LAN.
 
