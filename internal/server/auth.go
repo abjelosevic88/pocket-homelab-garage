@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -95,21 +96,27 @@ func (s *Server) coreUser(ctx context.Context, tok string) (*store.User, error) 
 	return s.firstOrSystemUser(ctx, strings.ToLower(in.User.Email), in.User.Name)
 }
 
-// firstOrSystemUser returns the user with that email, creating it when missing.
-// The very first account becomes admin, later ones are members.
+// firstOrSystemUser returns the user with that email, creating it when missing
+// (Core sign-in, Core device / person tokens, OIDC, proxy header). Accounts made
+// this way are members; only the very first account on the box (the owner)
+// becomes admin, whatever role the identity provider reports.
 func (s *Server) firstOrSystemUser(ctx context.Context, email, name string) (*store.User, error) {
 	if u, err := s.store.GetUserByEmail(ctx, email); err == nil {
 		return u, nil
 	}
-	role := "member"
-	if n, _ := s.store.CountUsers(ctx); n == 0 {
-		role = "admin"
-	}
-	u := &store.User{Email: email, Name: name, Role: role}
+	u := &store.User{Email: email, Name: name, Role: "member"}
 	if err := s.store.CreateUser(ctx, u); err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			return s.store.GetUserByEmail(ctx, email) // created by a parallel request
+		}
 		return nil, err
 	}
-	s.log.Info("auto-provisioned user", "email", email, "mode", s.cfg.AuthMode, "role", role)
+	if s.store.PromoteIfFirst(ctx, u.ID) {
+		u.Role = "admin"
+		// the box owner: environment-configured integrations are theirs
+		_ = s.seedOwnerSettings(ctx, u.ID)
+	}
+	s.log.Info("auto-provisioned user", "email", email, "mode", s.cfg.AuthMode, "role", u.Role)
 	return u, nil
 }
 
@@ -174,6 +181,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	st, _ := s.store.GetSettings(ctx)
 	st.SetupComplete = true
 	_ = s.store.SaveSettings(ctx, st)
+	_ = s.seedOwnerSettings(ctx, u.ID)
 	id, err := s.store.CreateSession(ctx, u.ID, s.cfg.SessionTTL)
 	if err != nil {
 		s.fail(w, err, "create session")

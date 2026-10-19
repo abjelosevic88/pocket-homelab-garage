@@ -109,28 +109,24 @@ func (s *Store) SetVehicleMembers(ctx context.Context, id int64, members []Vehic
 	return tx.Commit()
 }
 
-// VehicleRole returns the user's role on a vehicle ("" = no access). Admins see everything.
+// VehicleRole returns the user's role on a vehicle ("" = no access). Only the
+// owner and the people the owner shared it with have a role; being an admin
+// of the box grants nothing here.
 func (s *Store) VehicleRole(ctx context.Context, id int64, u *User) string {
-	if u == nil {
+	if u == nil || id <= 0 {
 		return ""
 	}
 	var role string
-	err := s.DB.QueryRowContext(ctx, `SELECT role FROM vehicle_members WHERE vehicle_id = ? AND user_id = ?`, id, u.ID).Scan(&role)
-	if err == nil {
-		return role
+	if err := s.DB.QueryRowContext(ctx, `SELECT m.role FROM vehicle_members m JOIN vehicles v ON v.id = m.vehicle_id WHERE m.vehicle_id = ? AND m.user_id = ?`, id, u.ID).Scan(&role); err != nil {
+		return ""
 	}
-	if u.Role == "admin" {
-		var n int
-		if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(1) FROM vehicles WHERE id = ?`, id).Scan(&n); err == nil && n > 0 {
-			return "admin"
-		}
-	}
-	return ""
+	return role
 }
 
 // VehicleFilter narrows ListVehicles.
 type VehicleFilter struct {
-	UserID   int64 // 0 = everyone's
+	UserID   int64 // vehicles this person owns or was added to (required unless OwnerID is set)
+	OwnerID  int64 // only vehicles this person owns (background jobs)
 	Status   string
 	Query    string
 	Dawarich bool
@@ -140,8 +136,17 @@ type VehicleFilter struct {
 func (s *Store) ListVehicles(ctx context.Context, f VehicleFilter) ([]Vehicle, error) {
 	q := `SELECT DISTINCT v.` + strings.ReplaceAll(vehicleCols, ", ", ", v.") + `, COALESCE(m.role, '') FROM vehicles v LEFT JOIN vehicle_members m ON m.vehicle_id = v.id AND m.user_id = ? WHERE 1=1`
 	args := []any{f.UserID}
-	if f.UserID > 0 {
+	switch {
+	case f.OwnerID > 0:
+		q += ` AND v.owner_id = ?`
+		args = append(args, f.OwnerID)
+		if f.UserID > 0 {
+			q += ` AND m.user_id IS NOT NULL`
+		}
+	case f.UserID > 0:
 		q += ` AND m.user_id IS NOT NULL`
+	default:
+		return []Vehicle{}, nil // nobody asked: nobody's vehicles
 	}
 	if f.Status != "" {
 		q += ` AND v.status = ?`
@@ -189,7 +194,7 @@ func (s *Store) DeleteVehicle(ctx context.Context, id int64) error {
 	return nil
 }
 
-// VehicleByExternalID finds an imported vehicle.
-func (s *Store) VehicleByExternalID(ctx context.Context, ext string) (*Vehicle, error) {
-	return scanVehicle(s.DB.QueryRowContext(ctx, `SELECT `+vehicleCols+` FROM vehicles WHERE external_id = ?`, ext))
+// VehicleByExternalID finds a vehicle this owner imported earlier.
+func (s *Store) VehicleByExternalID(ctx context.Context, ownerID int64, ext string) (*Vehicle, error) {
+	return scanVehicle(s.DB.QueryRowContext(ctx, `SELECT `+vehicleCols+` FROM vehicles WHERE owner_id = ? AND external_id = ?`, ownerID, ext))
 }

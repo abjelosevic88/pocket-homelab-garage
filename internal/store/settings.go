@@ -8,9 +8,105 @@ import (
 // DefaultTitle is the app title until someone changes it.
 const DefaultTitle = "Pocket Garage"
 
-// GetSettings loads all settings with defaults applied.
+// GlobalKeys are the box-wide settings (admin-only). Every other key is a
+// person's own choice and lives in user_settings.
+var GlobalKeys = []string{"title", "fx_auto", "setup_complete"}
+
+// PersonalKeys are what each person sets for themselves: display preferences
+// and the credentials of the integrations they connected.
+var PersonalKeys = []string{"home_currency", "date_format", "time_format", "distance_unit", "volume_unit", "economy_unit",
+	"firefly_url", "firefly_token", "firefly_category", "firefly_account", "firefly_auto_sync",
+	"dawarich_url", "dawarich_api_key", "notify_url", "notify_format", "notify_hour", "notify_digest",
+	"travel_url", "travel_token", "travel_public_url", "inventory_url", "inventory_token"}
+
+// DefaultSettings returns the built-in defaults.
+func DefaultSettings() Settings {
+	return Settings{Title: DefaultTitle, HomeCurrency: "EUR", DateFormat: "auto", TimeFormat: "auto", DistanceUnit: "km", VolumeUnit: "l", EconomyUnit: "l100", FXAuto: true, FireflyAutoSync: true, NotifyFormat: "apprise", NotifyHour: 8, NotifyDigest: true}
+}
+
+func applySetting(st *Settings, k, v string, global bool) {
+	if global {
+		switch k {
+		case "title":
+			if v != "" {
+				st.Title = v
+			}
+		case "fx_auto":
+			st.FXAuto = v != "0"
+		case "setup_complete":
+			st.SetupComplete = v == "1"
+		}
+		return
+	}
+	switch k {
+	case "home_currency":
+		if v != "" {
+			st.HomeCurrency = v
+		}
+	case "date_format":
+		if v != "" {
+			st.DateFormat = v
+		}
+	case "time_format":
+		if v != "" {
+			st.TimeFormat = v
+		}
+	case "distance_unit":
+		if v == "mi" || v == "km" {
+			st.DistanceUnit = v
+		}
+	case "volume_unit":
+		if v != "" {
+			st.VolumeUnit = v
+		}
+	case "economy_unit":
+		if v != "" {
+			st.EconomyUnit = v
+		}
+	case "firefly_url":
+		st.FireflyURL = v
+	case "firefly_token":
+		st.FireflyToken = v
+	case "firefly_category":
+		st.FireflyCategory = v
+	case "firefly_account":
+		st.FireflyAccount = v
+	case "firefly_auto_sync":
+		st.FireflyAutoSync = v != "0"
+	case "dawarich_url":
+		st.DawarichURL = v
+	case "dawarich_api_key":
+		st.DawarichAPIKey = v
+	case "notify_url":
+		st.NotifyURL = v
+	case "notify_format":
+		if v != "" {
+			st.NotifyFormat = v
+		}
+	case "notify_hour":
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 23 {
+			st.NotifyHour = n
+		}
+	case "notify_digest":
+		st.NotifyDigest = v != "0"
+	case "travel_url":
+		st.TravelURL = v
+	case "travel_token":
+		st.TravelToken = v
+	case "travel_public_url":
+		st.TravelPublicURL = v
+	case "inventory_url":
+		st.InventoryURL = v
+	case "inventory_token":
+		st.InventoryToken = v
+	}
+}
+
+// GetSettings loads the box-wide settings (title, exchange-rate lookups,
+// setup flag) over the defaults. Personal fields carry defaults only; use
+// GetUserSettings for a person's view.
 func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
-	st := Settings{Title: DefaultTitle, HomeCurrency: "EUR", DateFormat: "auto", TimeFormat: "auto", DistanceUnit: "km", VolumeUnit: "l", EconomyUnit: "l100", FXAuto: true, FireflyAutoSync: true, NotifyFormat: "apprise", NotifyHour: 8, NotifyDigest: true}
+	st := DefaultSettings()
 	rows, err := s.DB.QueryContext(ctx, `SELECT key, value FROM settings`)
 	if err != nil {
 		return st, err
@@ -21,92 +117,42 @@ func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
 		if err := rows.Scan(&k, &v); err != nil {
 			return st, err
 		}
-		switch k {
-		case "title":
-			if v != "" {
-				st.Title = v
-			}
-		case "home_currency":
-			if v != "" {
-				st.HomeCurrency = v
-			}
-		case "date_format":
-			if v != "" {
-				st.DateFormat = v
-			}
-		case "time_format":
-			if v != "" {
-				st.TimeFormat = v
-			}
-		case "distance_unit":
-			if v == "mi" {
-				st.DistanceUnit = "mi"
-			}
-		case "volume_unit":
-			if v != "" {
-				st.VolumeUnit = v
-			}
-		case "economy_unit":
-			if v != "" {
-				st.EconomyUnit = v
-			}
-		case "fx_auto":
-			st.FXAuto = v != "0"
-		case "firefly_url":
-			st.FireflyURL = v
-		case "firefly_token":
-			st.FireflyToken = v
-		case "firefly_category":
-			st.FireflyCategory = v
-		case "firefly_account":
-			st.FireflyAccount = v
-		case "firefly_auto_sync":
-			st.FireflyAutoSync = v != "0"
-		case "dawarich_url":
-			st.DawarichURL = v
-		case "dawarich_api_key":
-			st.DawarichAPIKey = v
-		case "notify_url":
-			st.NotifyURL = v
-		case "notify_format":
-			if v != "" {
-				st.NotifyFormat = v
-			}
-		case "notify_hour":
-			if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 23 {
-				st.NotifyHour = n
-			}
-		case "notify_digest":
-			st.NotifyDigest = v != "0"
-		case "travel_url":
-			st.TravelURL = v
-		case "travel_token":
-			st.TravelToken = v
-		case "travel_public_url":
-			st.TravelPublicURL = v
-		case "inventory_url":
-			st.InventoryURL = v
-		case "inventory_token":
-			st.InventoryToken = v
-		case "setup_complete":
-			st.SetupComplete = v == "1"
-		}
+		applySetting(&st, k, v, true)
 	}
 	return st, rows.Err()
 }
 
-// SaveSettings persists all settings.
-func (s *Store) SaveSettings(ctx context.Context, st Settings) error {
+// GetUserSettings overlays a person's own settings on base (the box-wide
+// settings with the server defaults applied).
+func (s *Store) GetUserSettings(ctx context.Context, userID int64, base Settings) (Settings, error) {
+	st := base
+	rows, err := s.DB.QueryContext(ctx, `SELECT key, value FROM user_settings WHERE user_id = ?`, userID)
+	if err != nil {
+		return st, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return st, err
+		}
+		applySetting(&st, k, v, false)
+	}
+	return st, rows.Err()
+}
+
+func settingsKV(st Settings) map[string]string {
 	b := map[bool]string{true: "1", false: "0"}
-	kv := map[string]string{
+	return map[string]string{
 		"title":             st.Title,
+		"fx_auto":           b[st.FXAuto],
+		"setup_complete":    b[st.SetupComplete],
 		"home_currency":     st.HomeCurrency,
 		"date_format":       st.DateFormat,
 		"time_format":       st.TimeFormat,
 		"distance_unit":     st.DistanceUnit,
 		"volume_unit":       st.VolumeUnit,
 		"economy_unit":      st.EconomyUnit,
-		"fx_auto":           b[st.FXAuto],
 		"firefly_url":       st.FireflyURL,
 		"firefly_token":     st.FireflyToken,
 		"firefly_category":  st.FireflyCategory,
@@ -123,14 +169,34 @@ func (s *Store) SaveSettings(ctx context.Context, st Settings) error {
 		"travel_public_url": st.TravelPublicURL,
 		"inventory_url":     st.InventoryURL,
 		"inventory_token":   st.InventoryToken,
-		"setup_complete":    b[st.SetupComplete],
 	}
+}
+
+// SaveSettings persists the box-wide settings only.
+func (s *Store) SaveSettings(ctx context.Context, st Settings) error {
+	kv := settingsKV(st)
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	for k, v := range kv {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, k, v); err != nil {
+	for _, k := range GlobalKeys {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, k, kv[k]); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// SaveUserSettings persists a person's own settings.
+func (s *Store) SaveUserSettings(ctx context.Context, userID int64, st Settings) error {
+	kv := settingsKV(st)
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	for _, k := range PersonalKeys {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`, userID, k, kv[k]); err != nil {
 			_ = tx.Rollback()
 			return err
 		}

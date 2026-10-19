@@ -51,21 +51,22 @@ function General() {
   if (!f) return <Loading />
   return (
     <div className="two-col">
-      <Card title="Preferences">
+      <Card title="Your preferences">
         <div className="grid" style={{ gap: 14 }}>
           <Field label="App title"><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} maxLength={40} disabled={!isAdmin} /></Field>
-          <Field label="Home currency" help="Totals across vehicles convert into this. Each vehicle has its own currency too."><CurrencySelect value={f.home_currency} onChange={c => setF({ ...f, home_currency: c })} disabled={!isAdmin} /></Field>
+          <Field label="Home currency" help="Totals across vehicles convert into this. Each vehicle has its own currency too."><CurrencySelect value={f.home_currency} onChange={c => setF({ ...f, home_currency: c })} /></Field>
           <div className="two-col tight">
-            <Field label="Date format"><Select value={f.date_format} onChange={v => setF({ ...f, date_format: v as DateFormat })} options={DATE_FORMATS.map(d => ({ value: d.id, label: d.label }))} disabled={!isAdmin} /></Field>
-            <Field label="Time format"><Select value={f.time_format} onChange={v => setF({ ...f, time_format: v as TimeFormat })} options={TIME_FORMATS.map(d => ({ value: d.id, label: d.label }))} disabled={!isAdmin} /></Field>
+            <Field label="Date format"><Select value={f.date_format} onChange={v => setF({ ...f, date_format: v as DateFormat })} options={DATE_FORMATS.map(d => ({ value: d.id, label: d.label }))} /></Field>
+            <Field label="Time format"><Select value={f.time_format} onChange={v => setF({ ...f, time_format: v as TimeFormat })} options={TIME_FORMATS.map(d => ({ value: d.id, label: d.label }))} /></Field>
           </div>
           <div className="three-col tight">
             <Field group label="New vehicles use"><Segmented value={f.distance_unit} onChange={v => setF({ ...f, distance_unit: v as 'km' | 'mi' })} options={[{ value: 'km', label: 'km' }, { value: 'mi', label: 'miles' }]} size="sm" /></Field>
-            <Field label="Volume"><Select value={f.volume_unit} onChange={v => setF({ ...f, volume_unit: v as SettingsT['volume_unit'] })} options={VOL_OPTIONS.map(o => ({ value: o.id, label: o.label }))} disabled={!isAdmin} /></Field>
-            <Field label="Economy"><Select value={f.economy_unit} onChange={v => setF({ ...f, economy_unit: v as SettingsT['economy_unit'] })} options={ECON_OPTIONS.map(o => ({ value: o.id, label: o.label }))} disabled={!isAdmin} /></Field>
+            <Field label="Volume"><Select value={f.volume_unit} onChange={v => setF({ ...f, volume_unit: v as SettingsT['volume_unit'] })} options={VOL_OPTIONS.map(o => ({ value: o.id, label: o.label }))} /></Field>
+            <Field label="Economy"><Select value={f.economy_unit} onChange={v => setF({ ...f, economy_unit: v as SettingsT['economy_unit'] })} options={ECON_OPTIONS.map(o => ({ value: o.id, label: o.label }))} /></Field>
           </div>
           <label className="row"><input type="checkbox" checked={f.fx_auto} onChange={e => setF({ ...f, fx_auto: e.target.checked })} style={{ width: 'auto' }} disabled={!isAdmin || f.fx_provider === 'none'} /> Look up exchange rates automatically (Frankfurter / open.er-api.com; euro pegs like BAM are built in){f.fx_provider === 'none' && <span className="muted small"> — disabled on the server</span>}</label>
-          {isAdmin ? <div><button className="btn primary" onClick={() => save()} disabled={busy}>Save</button></div> : <p className="muted small">Only an admin can change these.</p>}
+          <div><button className="btn primary" onClick={() => save()} disabled={busy}>Save</button></div>
+          <p className="muted small">Currency, formats and units are yours alone. {isAdmin ? 'The app title and exchange-rate lookups apply to everyone on this box.' : 'The app title and exchange-rate lookups are set by an admin for everyone.'}</p>
         </div>
       </Card>
       <Card title="How it fits together">
@@ -83,7 +84,7 @@ function General() {
 }
 
 function Integrations() {
-  const { f, setF, save, busy, isAdmin } = useSettingsForm()
+  const { f, setF, save, busy } = useSettingsForm()
   const { toast } = useToast()
   const [test, setTest] = useState<Record<string, string>>({})
   const [accounts, setAccounts] = useState<{ id: string; name: string; currency: string }[]>([])
@@ -102,21 +103,21 @@ function Integrations() {
       <Card title="💶 Firefly III" actions={badge(f.firefly_configured)}>
         <p className="muted small">What the car really costs. Tag the vehicle's withdrawals in Firefly (e.g. <code>skoda</code>) and set that tag on the vehicle. Rows matching a fill-up or record by date and amount are linked; the rest come in as expenses. Synced every 30 minutes and on demand.</p>
         <div className="grid" style={{ gap: 12 }}>
-          <Field label="URL" help="Inside Docker use http://host.docker.internal:PORT or the service name."><input value={f.firefly_url} onChange={e => setF({ ...f, firefly_url: e.target.value })} placeholder="http://host.docker.internal:8083" disabled={!isAdmin} /></Field>
-          <Field label="Personal access token" help="Firefly → Options → Profile → OAuth → Personal access tokens. Stored on the server; shown masked."><input value={f.firefly_token} onChange={e => setF({ ...f, firefly_token: e.target.value })} disabled={!isAdmin} autoComplete="off" /></Field>
+          <Field label="URL" help="Inside Docker use http://host.docker.internal:PORT or the service name."><input value={f.firefly_url} onChange={e => setF({ ...f, firefly_url: e.target.value })} placeholder="http://host.docker.internal:8083" /></Field>
+          <Field label="Personal access token" help="Firefly → Options → Profile → OAuth → Personal access tokens. Stored on the server; shown masked."><input value={f.firefly_token} onChange={e => setF({ ...f, firefly_token: e.target.value })} autoComplete="off" /></Field>
           <div className="two-col tight">
-            <Field label="Pay from (default account for pushed withdrawals)">{accounts.length > 0 ? <Select value={f.firefly_account} onChange={a => setF({ ...f, firefly_account: a })} options={accounts.map(a => ({ value: a.name, label: a.name, hint: a.currency }))} clearLabel="None" disabled={!isAdmin} /> : <input value={f.firefly_account} onChange={e => setF({ ...f, firefly_account: e.target.value })} placeholder="Checking account" disabled={!isAdmin} />}</Field>
-            <Field label="Category for pushed withdrawals">{cats.length > 0 ? <Select value={f.firefly_category} onChange={c => setF({ ...f, firefly_category: c })} options={cats.map(c => ({ value: c, label: c }))} clearLabel="None" onCreate={c => c} disabled={!isAdmin} /> : <input value={f.firefly_category} onChange={e => setF({ ...f, firefly_category: e.target.value })} placeholder="automobil" disabled={!isAdmin} />}</Field>
+            <Field label="Pay from (default account for pushed withdrawals)">{accounts.length > 0 ? <Select value={f.firefly_account} onChange={a => setF({ ...f, firefly_account: a })} options={accounts.map(a => ({ value: a.name, label: a.name, hint: a.currency }))} clearLabel="None" /> : <input value={f.firefly_account} onChange={e => setF({ ...f, firefly_account: e.target.value })} placeholder="Checking account" />}</Field>
+            <Field label="Category for pushed withdrawals">{cats.length > 0 ? <Select value={f.firefly_category} onChange={c => setF({ ...f, firefly_category: c })} options={cats.map(c => ({ value: c, label: c }))} clearLabel="None" onCreate={c => c} /> : <input value={f.firefly_category} onChange={e => setF({ ...f, firefly_category: e.target.value })} placeholder="automobil" />}</Field>
           </div>
-          <label className="row"><input type="checkbox" checked={f.firefly_auto_sync} onChange={e => setF({ ...f, firefly_auto_sync: e.target.checked })} style={{ width: 'auto' }} disabled={!isAdmin} /> Sync tagged transactions automatically every 30 minutes</label>
+          <label className="row"><input type="checkbox" checked={f.firefly_auto_sync} onChange={e => setF({ ...f, firefly_auto_sync: e.target.checked })} style={{ width: 'auto' }} /> Sync tagged transactions automatically every 30 minutes</label>
           <div className="row"><button className="btn sm" onClick={() => run('firefly', f.firefly_url, f.firefly_token)} disabled={!f.firefly_url}>Test connection</button>{status('firefly')}</div>
         </div>
       </Card>
       <Card title="🛰 Dawarich" actions={badge(f.dawarich_configured)}>
         <p className="muted small">Kilometres you actually drove, per day, from the location history. Pocket Garage adds them on top of the last odometer reading, so the estimate (and reminders by distance) stay current between fill-ups. Turn it on per vehicle under the vehicle's Settings tab.</p>
         <div className="grid" style={{ gap: 12 }}>
-          <Field label="URL"><input value={f.dawarich_url} onChange={e => setF({ ...f, dawarich_url: e.target.value })} placeholder="https://dawarich.example.com" disabled={!isAdmin} /></Field>
-          <Field label="API key" help="Dawarich → Account → API key."><input value={f.dawarich_api_key} onChange={e => setF({ ...f, dawarich_api_key: e.target.value })} disabled={!isAdmin} autoComplete="off" /></Field>
+          <Field label="URL"><input value={f.dawarich_url} onChange={e => setF({ ...f, dawarich_url: e.target.value })} placeholder="https://dawarich.example.com" /></Field>
+          <Field label="API key" help="Dawarich → Account → API key."><input value={f.dawarich_api_key} onChange={e => setF({ ...f, dawarich_api_key: e.target.value })} autoComplete="off" /></Field>
           <div className="row"><button className="btn sm" onClick={() => run('dawarich', f.dawarich_url, f.dawarich_api_key)} disabled={!f.dawarich_url}>Test connection</button>{status('dawarich')}</div>
         </div>
       </Card>
@@ -124,12 +125,12 @@ function Integrations() {
         <p className="muted small">One push per vehicle when a reminder becomes <i>due soon</i>, <i>due</i> or <i>overdue</i>, plus expiring documents. Apprise gateway (<code>…/notify/&lt;key&gt;</code>), an ntfy topic URL, or any webhook that takes JSON.</p>
         <div className="grid" style={{ gap: 12 }}>
           <div className="two-col tight">
-            <Field label="URL"><input value={f.notify_url} onChange={e => setF({ ...f, notify_url: e.target.value })} placeholder="http://apprise:8000/notify/garage" disabled={!isAdmin} /></Field>
+            <Field label="URL"><input value={f.notify_url} onChange={e => setF({ ...f, notify_url: e.target.value })} placeholder="http://apprise:8000/notify/garage" /></Field>
             <Field group label="Format"><Segmented value={f.notify_format} onChange={v => setF({ ...f, notify_format: v })} options={[{ value: 'apprise', label: 'Apprise' }, { value: 'ntfy', label: 'ntfy' }, { value: 'json', label: 'JSON' }]} size="sm" /></Field>
           </div>
           <div className="two-col tight">
-            <Field label="Check at (hour, server time)"><input type="number" min={0} max={23} value={f.notify_hour} onChange={e => setF({ ...f, notify_hour: Number(e.target.value) })} disabled={!isAdmin} /></Field>
-            <Field group label="Overdue nag"><label className="row" style={{ paddingTop: 8 }}><input type="checkbox" checked={f.notify_digest} onChange={e => setF({ ...f, notify_digest: e.target.checked })} style={{ width: 'auto' }} disabled={!isAdmin} /> repeat overdue items every Monday</label></Field>
+            <Field label="Check at (hour, server time)"><input type="number" min={0} max={23} value={f.notify_hour} onChange={e => setF({ ...f, notify_hour: Number(e.target.value) })} /></Field>
+            <Field group label="Overdue nag"><label className="row" style={{ paddingTop: 8 }}><input type="checkbox" checked={f.notify_digest} onChange={e => setF({ ...f, notify_digest: e.target.checked })} style={{ width: 'auto' }} /> repeat overdue items every Monday</label></Field>
           </div>
           <div className="row"><button className="btn sm" onClick={() => run('notify', f.notify_url, '', { format: f.notify_format })} disabled={!f.notify_url}>Send a test</button>{f.notify_configured && <button className="btn sm" onClick={notifyRun}>Push everything due now</button>}{status('notify')}</div>
         </div>
@@ -138,10 +139,10 @@ function Integrations() {
         <p className="muted small">Fill-ups and costs that fall inside a trip show up on the vehicle overview per trip, with the kilometres driven. Create a token in Pocket Travel under Settings → API tokens.</p>
         <div className="grid" style={{ gap: 12 }}>
           <div className="two-col tight">
-            <Field label="URL"><input value={f.travel_url} onChange={e => setF({ ...f, travel_url: e.target.value })} placeholder="http://host.docker.internal:8174" disabled={!isAdmin} /></Field>
-            <Field label="API token"><input value={f.travel_token} onChange={e => setF({ ...f, travel_token: e.target.value })} disabled={!isAdmin} autoComplete="off" /></Field>
+            <Field label="URL"><input value={f.travel_url} onChange={e => setF({ ...f, travel_url: e.target.value })} placeholder="http://host.docker.internal:8174" /></Field>
+            <Field label="API token"><input value={f.travel_token} onChange={e => setF({ ...f, travel_token: e.target.value })} autoComplete="off" /></Field>
           </div>
-          <Field label="Public URL (optional)" help="What the browser opens for trip links when the URL above is internal (e.g. host.docker.internal)."><input value={f.travel_public_url} onChange={e => setF({ ...f, travel_public_url: e.target.value })} placeholder="https://travel.example.com" disabled={!isAdmin} /></Field>
+          <Field label="Public URL (optional)" help="What the browser opens for trip links when the URL above is internal (e.g. host.docker.internal)."><input value={f.travel_public_url} onChange={e => setF({ ...f, travel_public_url: e.target.value })} placeholder="https://travel.example.com" /></Field>
           <div className="row"><button className="btn sm" onClick={() => run('travel', f.travel_url, f.travel_token)} disabled={!f.travel_url}>Test connection</button>{status('travel')}</div>
         </div>
       </Card>
@@ -149,13 +150,13 @@ function Integrations() {
         <p className="muted small">Parts and fluids on the shelf. When you list parts on a record, the name field suggests inventory items. Token from Pocket Inventory → Settings → API tokens.</p>
         <div className="grid" style={{ gap: 12 }}>
           <div className="two-col tight">
-            <Field label="URL"><input value={f.inventory_url} onChange={e => setF({ ...f, inventory_url: e.target.value })} placeholder="http://host.docker.internal:8170" disabled={!isAdmin} /></Field>
-            <Field label="API token"><input value={f.inventory_token} onChange={e => setF({ ...f, inventory_token: e.target.value })} disabled={!isAdmin} autoComplete="off" /></Field>
+            <Field label="URL"><input value={f.inventory_url} onChange={e => setF({ ...f, inventory_url: e.target.value })} placeholder="http://host.docker.internal:8170" /></Field>
+            <Field label="API token"><input value={f.inventory_token} onChange={e => setF({ ...f, inventory_token: e.target.value })} autoComplete="off" /></Field>
           </div>
           <div className="row"><button className="btn sm" onClick={() => run('inventory', f.inventory_url, f.inventory_token)} disabled={!f.inventory_url}>Test connection</button>{status('inventory')}</div>
         </div>
       </Card>
-      {isAdmin && <div><button className="btn primary" onClick={() => save()} disabled={busy}>Save integrations</button></div>}
+      <div><button className="btn primary" onClick={() => save()} disabled={busy}>Save integrations</button></div>
     </div>
   )
 }
@@ -218,7 +219,7 @@ function Users() {
   const run = async (fn: () => Promise<unknown>, msg: string) => { try { await fn(); await reloadMeta(); toast(msg) } catch (e) { toast((e as Error).message, 'err') } }
   return (
     <Card title="Users" actions={isAdmin && <button className="btn primary sm" onClick={() => setEdit({ role: 'member' })}>+ Add user</button>}>
-      <p className="muted">Everyone signs in with their own account. A vehicle is visible to its owner and the people added under the vehicle's Settings; admins see everything and manage users and integrations. The same email and password work as Basic auth for the phone app and Raycast.</p>
+      <p className="muted">Everyone signs in with their own account and keeps their own garage: a vehicle is visible only to its owner and the people the owner adds under the vehicle's Settings. Preferences and integrations (Firefly, Dawarich, notifications, Travel, Inventory) are personal too. Admins manage accounts and the box-wide settings but do not see anyone else's vehicles. The same email and password work as Basic auth for the phone app and Raycast.</p>
       <table className="table compact">
         <thead><tr><th /><th>Name</th><th>Email</th><th>Role</th><th /></tr></thead>
         <tbody>
@@ -321,12 +322,13 @@ function Tokens() {
 }
 
 function Data() {
+  const { user } = useApp()
   return (
     <div className="two-col">
-      <Card title="Backup">
+      {user?.role === 'admin' && <Card title="Backup (admin)">
         <p className="muted">A consistent copy of the SQLite database (<code>VACUUM INTO</code>) with every vehicle. Uploaded documents and photos live next to it under <code>files/</code>. Restore by stopping the app and replacing <code>pocket-garage.db</code> in the data directory.</p>
         <a className="btn primary" href={`${V1}/backup`}>Download database</a>
-      </Card>
+      </Card>}
       <Card title="Per-vehicle exports">
         <p className="muted">Each vehicle's Settings tab offers a JSON backup (imports again under Import), CSV for records, fuel and odometer, and a calendar (.ics) of its reminders.</p>
       </Card>
@@ -346,11 +348,11 @@ function About() {
           <tbody>
             <tr><th>Version</th><td className="mono">{String(data.version)}</td></tr>
             <tr><th>Runtime</th><td className="mono">{String(data.go)} · {String(data.os)}/{String(data.arch)}</td></tr>
-            <tr><th>Auth mode</th><td className="mono">{String(data.auth_mode)}</td></tr>
-            <tr><th>Database</th><td className="mono">{String(data.db_path)} · {fmtBytes(Number(data.db_bytes))} · files {fmtBytes(Number(data.files_bytes))}</td></tr>
+            {data.auth_mode !== undefined && <tr><th>Auth mode</th><td className="mono">{String(data.auth_mode)}</td></tr>}
+            {data.db_path !== undefined && <tr><th>Database</th><td className="mono">{String(data.db_path)} · {fmtBytes(Number(data.db_bytes))} · files {fmtBytes(Number(data.files_bytes))}</td></tr>}
             <tr><th>Timezone</th><td className="mono">{String(data.timezone)}</td></tr>
             <tr><th>Uptime</th><td className="mono">{String(data.uptime)}</td></tr>
-            <tr><th>Rows</th><td className="mono">{counts.vehicles} vehicles · {counts.fuel} fill-ups · {counts.records} records · {counts.odometer} readings · {counts.reminders} reminders · {counts.documents} documents · {counts.users} users</td></tr>
+            {data.counts !== undefined && <tr><th>Rows</th><td className="mono">{counts.vehicles} vehicles · {counts.fuel} fill-ups · {counts.records} records · {counts.odometer} readings · {counts.reminders} reminders · {counts.documents} documents · {counts.users} users</td></tr>}
           </tbody>
         </table>
       )}

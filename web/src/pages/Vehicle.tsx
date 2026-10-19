@@ -45,7 +45,7 @@ export default function VehiclePage() {
   if (!ov) return <Loading />
   const v = ov.vehicle
   const s = v.summary!
-  const canEdit = v.role !== 'viewer' || user?.role === 'admin'
+  const canEdit = v.role !== 'viewer'
   const t = (TABS.find(x => x.id === tab) ? tab : 'overview') as Tab
   return (
     <VCtx.Provider value={{ vehicle: v, overview: ov, reload: load, canEdit }}>

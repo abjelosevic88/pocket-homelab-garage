@@ -42,10 +42,9 @@ type llInput struct {
 	Image    bool    `json:"image"`
 }
 
+// handleLLVehicles lists a LubeLogger's vehicles; "imported" means the caller
+// already brought that one into their own garage.
 func (s *Server) handleLLVehicles(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
 	var in llInput
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -60,22 +59,20 @@ func (s *Server) handleLLVehicles(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for _, v := range vs {
 		ext := "lubelogger:" + strconv.FormatInt(v.ID, 10)
-		_, existsErr := s.store.VehicleByExternalID(r.Context(), ext)
+		_, existsErr := s.store.VehicleByExternalID(r.Context(), userFrom(r.Context()).ID, ext)
 		out = append(out, map[string]any{"id": v.ID, "name": strings.TrimSpace(fmt.Sprintf("%d %s %s", v.Year, v.Make, v.Model)), "plate": v.LicensePlate, "imported": existsErr == nil})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
 
+// handleLLImport imports LubeLogger vehicles into the caller's own garage.
 func (s *Server) handleLLImport(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
 	var in llInput
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	st, _ := s.store.GetSettings(r.Context())
+	st := s.settingsFor(r.Context(), userFrom(r.Context()).ID)
 	cur := strings.ToUpper(in.Currency)
 	if !currency.Valid(cur) {
 		cur = st.HomeCurrency
@@ -117,7 +114,7 @@ func (s *Server) importLubeLoggerSel(ctx context.Context, c *lubelogger.Client, 
 func (s *Server) importOneLL(ctx context.Context, c *lubelogger.Client, ownerID int64, cur string, lv lubelogger.Vehicle) llVehicleResult {
 	out := llVehicleResult{Source: strings.TrimSpace(fmt.Sprintf("%d %s %s", lv.Year, lv.Make, lv.Model)), Counts: map[string]int{}}
 	ext := "lubelogger:" + strconv.FormatInt(lv.ID, 10)
-	v, err := s.store.VehicleByExternalID(ctx, ext)
+	v, err := s.store.VehicleByExternalID(ctx, ownerID, ext)
 	if err != nil {
 		fuel := "petrol"
 		if lv.IsDiesel {
@@ -130,7 +127,7 @@ func (s *Server) importOneLL(ctx context.Context, c *lubelogger.Client, ownerID 
 		if lv.UseHours {
 			unit = "h"
 		}
-		st, _ := s.store.GetSettings(ctx)
+		st := s.settingsFor(ctx, ownerID)
 		if st.DistanceUnit == "mi" && unit == "km" {
 			unit = "mi"
 		}
@@ -421,15 +418,16 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "create vehicle")
 		return
 	}
+	uid := u.ID
 	for _, rc := range b.Records {
-		rc.ID, rc.VehicleID, rc.ExternalID = 0, v.ID, ""
+		rc.ID, rc.VehicleID, rc.ExternalID, rc.FireflyID, rc.CreatedBy = 0, v.ID, "", "", &uid
 		if rc.Parts == nil {
 			rc.Parts = []store.Part{}
 		}
 		_ = s.store.CreateRecord(ctx, &rc)
 	}
 	for _, f := range b.Fuel {
-		f.ID, f.VehicleID, f.ExternalID = 0, v.ID, ""
+		f.ID, f.VehicleID, f.ExternalID, f.FireflyID, f.CreatedBy = 0, v.ID, "", "", &uid
 		_ = s.store.CreateFuel(ctx, &f)
 	}
 	for _, o := range b.Odometer {

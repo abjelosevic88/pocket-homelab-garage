@@ -15,7 +15,7 @@ const vehicleKey vehicleKeyT = 2
 
 type vehicleCtx struct {
 	vehicle *store.Vehicle
-	role    string // owner | editor | viewer | admin
+	role    string // owner | editor | viewer
 }
 
 func vehicleFrom(ctx context.Context) *vehicleCtx {
@@ -55,9 +55,11 @@ func (s *Server) canEdit(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+// isOwner: the vehicle's owner (being a box admin does not count).
 func (s *Server) isOwner(r *http.Request) bool {
 	vc := vehicleFrom(r.Context())
-	return vc != nil && (vc.role == "owner" || vc.role == "admin")
+	u := userFrom(r.Context())
+	return vc != nil && u != nil && vc.role == "owner" && vc.vehicle.OwnerID == u.ID
 }
 
 // visibleVehicleIDs lists the ids a user may see.
@@ -69,9 +71,6 @@ func (s *Server) visibleVehicles(ctx context.Context, u *store.User, status stri
 func (s *Server) handleListVehicles(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r.Context())
 	f := store.VehicleFilter{UserID: u.ID, Query: strings.TrimSpace(r.URL.Query().Get("q")), Status: r.URL.Query().Get("status")}
-	if u.Role == "admin" && queryBool(r, "all") {
-		f.UserID = 0
-	}
 	vs, err := s.store.ListVehicles(r.Context(), f)
 	if err != nil {
 		s.fail(w, err, "list vehicles")
@@ -206,7 +205,7 @@ func (s *Server) handleCreateVehicle(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	st, _ := s.store.GetSettings(r.Context())
+	st := s.settingsFor(r.Context(), u.ID)
 	v := &store.Vehicle{OwnerID: u.ID, Currency: st.HomeCurrency, OdometerUnit: st.DistanceUnit, Status: "active"}
 	if msg := applyVehicle(v, in, keys); msg != "" {
 		writeErr(w, http.StatusBadRequest, msg)
@@ -247,6 +246,13 @@ func (s *Server) handleUpdateVehicle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	oldTag := v.FireflyTag
+	if !s.isOwner(r) {
+		// the Firefly tag / account and the Dawarich switch drive syncs that run
+		// with the owner's own credentials, so only the owner picks them
+		delete(keys, "firefly_tag")
+		delete(keys, "firefly_account")
+		delete(keys, "dawarich")
+	}
 	if msg := applyVehicle(v, in, keys); msg != "" {
 		writeErr(w, http.StatusBadRequest, msg)
 		return
@@ -410,11 +416,15 @@ func (s *Server) handleVehicleOverview(w http.ResponseWriter, r *http.Request) {
 	if months == nil {
 		months = []store.MonthlyCost{}
 	}
-	cl := s.clients(ctx)
+	cl := s.clientsFor(ctx, userFrom(ctx).ID) // the viewer's own Travel / Inventory / notifications
+	owner := cl
+	if v.OwnerID != userFrom(ctx).ID {
+		owner = s.clientsFor(ctx, v.OwnerID) // Firefly / Dawarich syncs run with the owner's credentials
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"vehicle": v, "reminders": rems, "recent_records": recent, "recent_fuel": fuel, "open_plans": open, "pinned_notes": pinned,
-		"expiring_documents": docs, "months": months, "activity": activity, "trips": s.tripsFor(ctx, cl, v),
-		"integrations": map[string]bool{"firefly": cl.firefly.Configured() && v.FireflyTag != "", "dawarich": cl.dawarich.Configured() && v.Dawarich, "travel": cl.travel.Configured(), "inventory": cl.inventory.Configured(), "notify": cl.notify.Configured()},
+		"expiring_documents": docs, "months": months, "activity": activity, "trips": s.tripsFor(ctx, cl, userFrom(ctx).ID, v),
+		"integrations": map[string]bool{"firefly": owner.firefly.Configured() && v.FireflyTag != "", "dawarich": owner.dawarich.Configured() && v.Dawarich, "travel": cl.travel.Configured(), "inventory": cl.inventory.Configured(), "notify": cl.notify.Configured()},
 	})
 }
 

@@ -55,9 +55,8 @@ func (s *Server) compatAuth(next http.Handler) http.Handler {
 		var u *store.User
 		if email, pass, ok := r.BasicAuth(); ok {
 			cand, err := s.store.GetUserByEmail(r.Context(), strings.ToLower(strings.TrimSpace(email)))
+			// a password is always required: an email alone never stands in for a person
 			if err == nil && cand.PasswordHash != "" && bcrypt.CompareHashAndPassword([]byte(cand.PasswordHash), []byte(pass)) == nil {
-				u = cand
-			} else if err == nil && s.cfg.AuthMode != "local" {
 				u = cand
 			}
 		}
@@ -216,7 +215,7 @@ func (s *Server) compatVehicleJSON(v *store.Vehicle) map[string]any {
 func (s *Server) compatAddVehicle(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r.Context())
 	f := readForm(r)
-	st, _ := s.store.GetSettings(r.Context())
+	st := s.settingsFor(r.Context(), u.ID)
 	year, _ := strconv.Atoi(f["year"])
 	v := &store.Vehicle{OwnerID: u.ID, Year: year, Make: strings.TrimSpace(f["make"]), Model: strings.TrimSpace(f["model"]), Plate: strings.TrimSpace(f["licensePlate"]), Currency: st.HomeCurrency, OdometerUnit: st.DistanceUnit, Status: "active", Kind: "car", Tags: strings.TrimSpace(f["tags"])}
 	switch strings.ToLower(f["fuelType"]) {
@@ -456,13 +455,21 @@ func (s *Server) compatUpdate(w http.ResponseWriter, r *http.Request, kind strin
 	if v == nil {
 		return
 	}
+	if s.store.VehicleRole(r.Context(), v.ID, userFrom(r.Context())) == "viewer" {
+		compatFail(w, http.StatusForbidden, "read-only access")
+		return
+	}
 	id, _ := strconv.ParseInt(f["id"], 10, 64)
 	if id == 0 {
 		compatFail(w, http.StatusBadRequest, "id is required")
 		return
 	}
 	if _, msg := s.compatWrite(r.Context(), v, kind, f, id); msg != "" {
-		compatFail(w, http.StatusBadRequest, msg)
+		status := http.StatusBadRequest
+		if msg == "record not found" {
+			status = http.StatusNotFound
+		}
+		compatFail(w, status, msg)
 		return
 	}
 	compatOK(w, "Record updated", map[string]any{"recordId": id})

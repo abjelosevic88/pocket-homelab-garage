@@ -25,6 +25,17 @@ func (s *Store) CreateUser(ctx context.Context, u *User) error {
 	return nil
 }
 
+// PromoteIfFirst makes the account admin only when it is the oldest account
+// and no admin exists yet, so two first sign-ins racing can't both be admin.
+func (s *Store) PromoteIfFirst(ctx context.Context, id int64) bool {
+	res, err := s.DB.ExecContext(ctx, `UPDATE users SET role = 'admin' WHERE id = ? AND id = (SELECT MIN(id) FROM users) AND NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin')`, id)
+	if err != nil {
+		return false
+	}
+	n, _ := res.RowsAffected()
+	return n == 1
+}
+
 // UpdateUser updates name/email/password/role.
 func (s *Store) UpdateUser(ctx context.Context, u *User) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE users SET email = ?, name = ?, password_hash = ?, role = ?, updated_at = ? WHERE id = ?`, u.Email, u.Name, u.PasswordHash, u.Role, Now(), u.ID)

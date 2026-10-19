@@ -57,7 +57,7 @@ export default function FuelTab() {
                 <td className="num muted small">{f.volume > 0 ? fmtPricePer(f.price_per, f.currency, currencies.find(c => c.code === f.currency)?.decimals ?? 2, u) : ''}</td>
                 <td className="num">{f.economy > 0 ? fmtEcon(f.economy, u, v.odometer_unit) : <span className="muted">—</span>}</td>
                 <td className="muted">{f.station}{f.grade && <span className="small"> · {f.grade}</span>}{cleanNotes(f.notes) && <div className="small">{cleanNotes(f.notes)}</div>}{f.firefly_id && <span className="tag-src" title={`Firefly journal ${f.firefly_id}`}> · firefly</span>}{f.source !== 'manual' && <span className="tag-src"> · {f.source}</span>}</td>
-                <td className="right" style={{ whiteSpace: 'nowrap' }}>{canEdit && <>{overview.integrations.firefly && !f.firefly_id && f.cost > 0 && <button className="btn ghost sm" onClick={() => push(f)} title="Create the withdrawal in Firefly III">→ Firefly</button>}<button className="btn ghost sm" onClick={() => setEdit(f)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(f)}>✕</button></>}</td>
+                <td className="right" style={{ whiteSpace: 'nowrap' }}>{canEdit && <>{v.role === 'owner' && overview.integrations.firefly && !f.firefly_id && f.cost > 0 && <button className="btn ghost sm" onClick={() => push(f)} title="Create the withdrawal in Firefly III">→ Firefly</button>}<button className="btn ghost sm" onClick={() => setEdit(f)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(f)}>✕</button></>}</td>
               </tr>
             ))}</tbody>
           </table>

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"sort"
 	"strings"
@@ -687,6 +688,7 @@ func (s *Server) handleUploadDocument(w http.ResponseWriter, r *http.Request) {
 	if !validDate(d.ExpiresOn) {
 		d.ExpiresOn = ""
 	}
+	s.checkDocLink(r.Context(), d)
 	if err := s.store.CreateDocument(r.Context(), d); err != nil {
 		s.fail(w, err, "create document")
 		return
@@ -731,6 +733,7 @@ func (s *Server) handleUpdateDocument(w http.ResponseWriter, r *http.Request) {
 	if in.LinkID != nil {
 		d.LinkID = *in.LinkID
 	}
+	s.checkDocLink(r.Context(), d)
 	if err := s.store.UpdateDocument(r.Context(), d); err != nil {
 		s.fail(w, err, "update document")
 		return
@@ -764,6 +767,22 @@ func (s *Server) handleDeleteDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	s.removeFile(file)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// checkDocLink drops a link to a row that is not on the document's own vehicle.
+func (s *Server) checkDocLink(ctx context.Context, d *store.Document) {
+	ok := false
+	switch d.LinkKind {
+	case "record":
+		_, err := s.store.GetRecord(ctx, d.VehicleID, d.LinkID)
+		ok = err == nil
+	case "fuel":
+		_, err := s.store.GetFuel(ctx, d.VehicleID, d.LinkID)
+		ok = err == nil
+	}
+	if !ok {
+		d.LinkKind, d.LinkID = "", 0
+	}
 }
 
 func atoi64(s string) int64 {

@@ -49,15 +49,10 @@ func (s *Store) GetReminder(ctx context.Context, vehicleID, id int64) (*Reminder
 	return scanReminder(s.DB.QueryRowContext(ctx, `SELECT `+reminderCols+` FROM reminders WHERE id = ? AND vehicle_id = ?`, id, vehicleID))
 }
 
-// ListReminders returns reminders for a vehicle (0 = every vehicle), urgency
-// computed against today and the given odometer estimate per vehicle.
+// ListReminders returns one vehicle's reminders (urgency not computed).
 func (s *Store) ListReminders(ctx context.Context, vehicleID int64, status string) ([]Reminder, error) {
-	q := `SELECT ` + reminderCols + ` FROM reminders WHERE 1=1`
-	args := []any{}
-	if vehicleID > 0 {
-		q += ` AND vehicle_id = ?`
-		args = append(args, vehicleID)
-	}
+	q := `SELECT ` + reminderCols + ` FROM reminders WHERE vehicle_id = ?`
+	args := []any{vehicleID}
 	if status != "" {
 		q += ` AND status = ?`
 		args = append(args, status)

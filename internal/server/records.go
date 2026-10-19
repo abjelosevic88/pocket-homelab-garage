@@ -128,7 +128,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.LogActivity(r.Context(), v.ID, uid, "added "+rec.Kind, rec.Description)
 	s.afterRecordChange(r.Context(), v, rec)
-	s.publish("garage.service_logged", fmt.Sprintf("record:%d", rec.ID), map[string]any{
+	s.publish(r.Context(), v.OwnerID, "garage.service_logged", fmt.Sprintf("record:%d", rec.ID), map[string]any{
 		"record_id": rec.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "kind": rec.Kind, "category": rec.Category,
 		"description": rec.Description, "date": rec.Date, "odometer": rec.Odometer, "cost": rec.Cost, "currency": rec.Currency,
 	})
@@ -364,7 +364,7 @@ func (s *Server) handleCreateFuel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.store.LogActivity(r.Context(), v.ID, uid, "added fill-up", f.Station)
-	s.publish("garage.fuel_logged", fmt.Sprintf("fuel:%d", f.ID), map[string]any{
+	s.publish(r.Context(), v.OwnerID, "garage.fuel_logged", fmt.Sprintf("fuel:%d", f.ID), map[string]any{
 		"fuel_id": f.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "date": f.Date, "station": f.Station,
 		"odometer": f.Odometer, "volume": f.Volume, "cost": f.Cost, "currency": f.Currency, "full_tank": f.FullTank,
 	})
@@ -477,7 +477,7 @@ func (s *Server) handleCreateOdometer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.store.LogActivity(r.Context(), v.ID, userFrom(r.Context()).ID, "odometer reading", "")
-	s.publish("garage.odometer_updated", fmt.Sprintf("odometer:%d", o.ID), map[string]any{
+	s.publish(r.Context(), v.OwnerID, "garage.odometer_updated", fmt.Sprintf("odometer:%d", o.ID), map[string]any{
 		"odometer_id": o.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "date": o.Date, "reading": o.Reading, "source": o.Source,
 	})
 	writeJSON(w, http.StatusCreated, o)
@@ -500,7 +500,7 @@ func (s *Server) handleConfirmOdometer(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "confirm")
 		return
 	}
-	s.publish("garage.odometer_updated", fmt.Sprintf("odometer:%d", o.ID), map[string]any{
+	s.publish(r.Context(), v.OwnerID, "garage.odometer_updated", fmt.Sprintf("odometer:%d", o.ID), map[string]any{
 		"odometer_id": o.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "date": o.Date, "reading": o.Reading, "source": o.Source,
 	})
 	writeJSON(w, http.StatusCreated, o)

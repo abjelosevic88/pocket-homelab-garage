@@ -10,7 +10,7 @@ Base path `/api/v1`. JSON in and out. Authenticate with the session cookie (brow
 | GET/PUT | `/auth/me` | profile, password change |
 | GET/POST/DELETE | `/tokens`, `/tokens/{id}` | personal access tokens |
 | GET/POST/PUT/DELETE | `/users`, `/users/{id}` | admin |
-| GET/PUT | `/settings` · GET `/settings/system` | shared settings (secrets masked; a masked value means "keep") |
+| GET/PUT | `/settings` · GET `/settings/system` | the caller's own preferences and integrations over the box-wide title / exchange-rate switch (only an admin changes those); secrets masked, a masked value means "keep". `/settings/system` shows paths and row counts to admins only; `/backup` is admin-only |
 | GET | `/meta` · `/currencies` · `/fx?from=&to=&date=` | lists the UI uses |
 | GET | `/backup` | consistent SQLite copy |
 

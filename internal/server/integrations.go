@@ -56,29 +56,26 @@ func (s *Server) publicSettings(st store.Settings) map[string]any {
 	}
 }
 
+// handleGetSettings returns the caller's own settings over the box-wide ones.
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	st, err := s.store.GetSettings(r.Context())
-	if err != nil {
-		s.fail(w, err, "settings")
-		return
-	}
-	writeJSON(w, http.StatusOK, s.publicSettings(st))
+	writeJSON(w, http.StatusOK, s.publicSettings(s.settingsFor(r.Context(), userFrom(r.Context()).ID)))
 }
 
+// handlePutSettings saves the caller's own preferences and integrations;
+// the box-wide keys (title, exchange-rate lookups) only change for an admin.
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
-	cur, err := s.store.GetSettings(r.Context())
-	if err != nil {
-		s.fail(w, err, "settings")
-		return
-	}
+	u := userFrom(r.Context())
+	cur := s.settingsFor(r.Context(), u.ID)
 	var in store.Settings
 	keys, err := decodeKeys(r, &in)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
+	}
+	admin := u.Role == "admin"
+	if !admin {
+		delete(keys, "title")
+		delete(keys, "fx_auto")
 	}
 	if keys["title"] {
 		cur.Title = strings.TrimSpace(in.Title)
@@ -151,18 +148,23 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	secret("travel_token", &cur.TravelToken, in.TravelToken)
 	url("inventory_url", &cur.InventoryURL, in.InventoryURL)
 	secret("inventory_token", &cur.InventoryToken, in.InventoryToken)
-	if err := s.store.SaveSettings(r.Context(), cur); err != nil {
+	if admin && (keys["title"] || keys["fx_auto"]) {
+		if err := s.store.SaveSettings(r.Context(), cur); err != nil {
+			s.fail(w, err, "save settings")
+			return
+		}
+	}
+	if err := s.store.SaveUserSettings(r.Context(), u.ID, cur); err != nil {
 		s.fail(w, err, "save settings")
 		return
 	}
-	_ = s.store.CacheDelete(r.Context(), "travel:")
-	writeJSON(w, http.StatusOK, s.publicSettings(cur))
+	_ = s.store.CacheDelete(r.Context(), fmt.Sprintf("travel:trips:%d", u.ID))
+	writeJSON(w, http.StatusOK, s.publicSettings(s.settingsFor(r.Context(), u.ID)))
 }
 
+// handleIntegrationTest checks a connection with the caller's own saved settings
+// (or the values typed into the form).
 func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
 	var in struct {
 		Which    string `json:"which"`
 		URL      string `json:"url"`
@@ -175,7 +177,7 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	st, _ := s.store.GetSettings(r.Context())
+	st := s.settingsFor(r.Context(), userFrom(r.Context()).ID)
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	keyOr := func(saved string) string {
@@ -240,7 +242,14 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": msg})
 }
 
+// handleSystemInfo: version for everyone; paths, sizes and row counts of the
+// whole box only for an admin.
 func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
+	if u := userFrom(r.Context()); u == nil || u.Role != "admin" {
+		writeJSON(w, http.StatusOK, map[string]any{"version": Version, "go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH,
+			"uptime": time.Since(s.started).Round(time.Second).String(), "timezone": time.Now().Location().String()})
+		return
+	}
 	var size, files int64
 	if fi, err := os.Stat(s.cfg.DBPath); err == nil {
 		size = fi.Size()
@@ -262,7 +271,12 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleBackup downloads the whole database: everyone's data and credentials,
+// so it is the box admin's maintenance tool only.
 func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
 	dir := filepath.Join(s.cfg.DataDir, "backups")
 	name := fmt.Sprintf("pocket-garage-%s.db", time.Now().Format("20060102-150405"))
 	dst := filepath.Join(dir, name)
@@ -336,7 +350,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "vehicles")
 		return
 	}
-	st, _ := s.store.GetSettings(ctx)
+	st := s.settingsFor(ctx, u.ID)
 	stats := store.HomeStats{}
 	ids := []int64{}
 	var reminders []store.Reminder
@@ -393,7 +407,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "vehicles")
 		return
 	}
-	st, _ := s.store.GetSettings(ctx)
+	st := s.settingsFor(ctx, u.ID)
 	out := map[string]any{"vehicles": len(vs), "currency": st.HomeCurrency}
 	var costYear, costMonth int64
 	due, soon := 0, 0
@@ -472,7 +486,7 @@ func majorString(minor int64, code string) string {
 // ---- Firefly ----
 
 func (s *Server) handleFireflyTags(w http.ResponseWriter, r *http.Request) {
-	cl := s.clients(r.Context())
+	cl := s.clientsFor(r.Context(), userFrom(r.Context()).ID)
 	if !cl.firefly.Configured() {
 		writeJSON(w, http.StatusOK, []firefly.Tag{})
 		return
@@ -486,7 +500,7 @@ func (s *Server) handleFireflyTags(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFireflyAccounts(w http.ResponseWriter, r *http.Request) {
-	cl := s.clients(r.Context())
+	cl := s.clientsFor(r.Context(), userFrom(r.Context()).ID)
 	if !cl.firefly.Configured() {
 		writeJSON(w, http.StatusOK, []firefly.Account{})
 		return
@@ -500,7 +514,7 @@ func (s *Server) handleFireflyAccounts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFireflyCategories(w http.ResponseWriter, r *http.Request) {
-	cl := s.clients(r.Context())
+	cl := s.clientsFor(r.Context(), userFrom(r.Context()).ID)
 	if !cl.firefly.Configured() {
 		writeJSON(w, http.StatusOK, []string{})
 		return
@@ -557,7 +571,7 @@ func (s *Server) syncFirefly(ctx context.Context, vehicleID int64) (*fireflySync
 	if err != nil {
 		return nil, err
 	}
-	cl := s.clients(ctx)
+	cl := s.clientsFor(ctx, v.OwnerID) // the owner's Firefly, whoever pressed sync
 	if !cl.firefly.Configured() || v.FireflyTag == "" {
 		return &fireflySyncResult{Notes: []string{"Firefly is not configured or the vehicle has no tag"}}, nil
 	}
@@ -683,34 +697,46 @@ func (s *Server) handleFireflyUnmatched(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"unmatched": list, "fetched_at": at, "synced_at": synced})
 }
 
-// autoSync refreshes Firefly and Dawarich for every vehicle that uses them.
+// autoSync refreshes Firefly and Dawarich person by person: each owner's
+// vehicles with that owner's own credentials.
 func (s *Server) autoSync(ctx context.Context) {
-	st, _ := s.store.GetSettings(ctx)
-	vs, err := s.store.ListVehicles(ctx, store.VehicleFilter{})
+	users, err := s.store.ListUsers(ctx)
 	if err != nil {
 		return
 	}
-	for i := range vs {
-		v := &vs[i]
-		if v.Status == "archived" {
+	for _, u := range users {
+		st := s.settingsFor(ctx, u.ID)
+		fireflyOn := st.FireflyAutoSync && st.FireflyToken != ""
+		dawarichOn := st.DawarichURL != "" && st.DawarichAPIKey != ""
+		if !fireflyOn && !dawarichOn {
 			continue
 		}
-		if st.FireflyAutoSync && v.FireflyTag != "" {
-			if _, err := s.syncFirefly(ctx, v.ID); err != nil {
-				s.log.Warn("firefly auto sync", "vehicle", v.Title(), "err", err)
-			}
+		vs, err := s.store.ListVehicles(ctx, store.VehicleFilter{OwnerID: u.ID})
+		if err != nil {
+			continue
 		}
-		if v.Dawarich {
-			if _, err := s.syncDawarich(ctx, v); err != nil {
-				s.log.Warn("dawarich sync", "vehicle", v.Title(), "err", err)
+		for i := range vs {
+			v := &vs[i]
+			if v.Status == "archived" {
+				continue
+			}
+			if fireflyOn && v.FireflyTag != "" {
+				if _, err := s.syncFirefly(ctx, v.ID); err != nil {
+					s.log.Warn("firefly auto sync", "vehicle", v.Title(), "err", err)
+				}
+			}
+			if dawarichOn && v.Dawarich {
+				if _, err := s.syncDawarich(ctx, v); err != nil {
+					s.log.Warn("dawarich sync", "vehicle", v.Title(), "err", err)
+				}
 			}
 		}
 	}
 }
 
-// pushFirefly creates a withdrawal for a record or fill-up.
+// pushFirefly creates a withdrawal for a record or fill-up in the owner's Firefly.
 func (s *Server) pushFirefly(ctx context.Context, v *store.Vehicle, date, desc string, amount int64, cur, notes string, kind string) (string, error) {
-	cl := s.clients(ctx)
+	cl := s.clientsFor(ctx, v.OwnerID)
 	if !cl.firefly.Configured() {
 		return "", fmt.Errorf("firefly is not configured")
 	}
@@ -728,7 +754,8 @@ func (s *Server) pushFirefly(ctx context.Context, v *store.Vehicle, date, desc s
 }
 
 func (s *Server) handlePushRecordFirefly(w http.ResponseWriter, r *http.Request) {
-	if !s.canEdit(w, r) {
+	if !s.isOwner(r) {
+		writeErr(w, http.StatusForbidden, "only the owner can send to their Firefly")
 		return
 	}
 	v := vehicleFrom(r.Context()).vehicle
@@ -757,7 +784,8 @@ func (s *Server) handlePushRecordFirefly(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handlePushFuelFirefly(w http.ResponseWriter, r *http.Request) {
-	if !s.canEdit(w, r) {
+	if !s.isOwner(r) {
+		writeErr(w, http.StatusForbidden, "only the owner can send to their Firefly")
 		return
 	}
 	v := vehicleFrom(r.Context()).vehicle
@@ -790,7 +818,7 @@ func (s *Server) handlePushFuelFirefly(w http.ResponseWriter, r *http.Request) {
 // syncDawarich stores the driving km per day since the last stored day
 // (re-reading the last 3 days, since Dawarich keeps receiving points).
 func (s *Server) syncDawarich(ctx context.Context, v *store.Vehicle) (int, error) {
-	cl := s.clients(ctx)
+	cl := s.clientsFor(ctx, v.OwnerID) // the owner's Dawarich, whoever pressed sync
 	if !cl.dawarich.Configured() {
 		return 0, fmt.Errorf("dawarich is not configured")
 	}
@@ -876,12 +904,13 @@ func (s *Server) handleDawarichDays(w http.ResponseWriter, r *http.Request) {
 
 // ---- Pocket Travel ----
 
-// trips returns the cached trip list (refreshed hourly).
-func (s *Server) trips(ctx context.Context, cl clients) []pocket.Trip {
+// trips returns a person's cached trip list (refreshed hourly).
+func (s *Server) trips(ctx context.Context, cl clients, userID int64) []pocket.Trip {
 	if !cl.travel.Configured() {
 		return nil
 	}
-	if val, at, ok := s.store.CacheGet(ctx, "travel:trips"); ok {
+	key := fmt.Sprintf("travel:trips:%d", userID)
+	if val, at, ok := s.store.CacheGet(ctx, key); ok {
 		if t, err := time.Parse(time.RFC3339Nano, at); err == nil && time.Since(t) < time.Hour {
 			var out []pocket.Trip
 			if json.Unmarshal([]byte(val), &out) == nil {
@@ -895,13 +924,13 @@ func (s *Server) trips(ctx context.Context, cl clients) []pocket.Trip {
 		return nil
 	}
 	b, _ := json.Marshal(trips)
-	_ = s.store.CachePut(ctx, "travel:trips", string(b))
+	_ = s.store.CachePut(ctx, key, string(b))
 	return trips
 }
 
-// tripsFor lists the trips with what this vehicle spent during each.
-func (s *Server) tripsFor(ctx context.Context, cl clients, v *store.Vehicle) []map[string]any {
-	trips := s.trips(ctx, cl)
+// tripsFor lists the viewer's own trips with what this vehicle spent during each.
+func (s *Server) tripsFor(ctx context.Context, cl clients, userID int64, v *store.Vehicle) []map[string]any {
+	trips := s.trips(ctx, cl, userID)
 	out := []map[string]any{}
 	if len(trips) == 0 {
 		return out
@@ -957,13 +986,14 @@ func firstNonEmpty(a, b string) string {
 
 func (s *Server) handleVehicleTrips(w http.ResponseWriter, r *http.Request) {
 	v := vehicleFrom(r.Context()).vehicle
-	writeJSON(w, http.StatusOK, s.tripsFor(r.Context(), s.clients(r.Context()), v))
+	uid := userFrom(r.Context()).ID
+	writeJSON(w, http.StatusOK, s.tripsFor(r.Context(), s.clientsFor(r.Context(), uid), uid, v))
 }
 
 // ---- Pocket Inventory ----
 
 func (s *Server) handleInventorySearch(w http.ResponseWriter, r *http.Request) {
-	cl := s.clients(r.Context())
+	cl := s.clientsFor(r.Context(), userFrom(r.Context()).ID)
 	if !cl.inventory.Configured() {
 		writeJSON(w, http.StatusOK, []pocket.Item{})
 		return
@@ -981,15 +1011,15 @@ func (s *Server) handleInventorySearch(w http.ResponseWriter, r *http.Request) {
 
 // ---- notifications ----
 
-// checkReminders pushes one message per vehicle for reminders whose urgency
-// rose since the last push (ok → soon → due → overdue). With force every
-// non-ok reminder is included.
-func (s *Server) checkReminders(ctx context.Context, force bool) (int, error) {
-	cl := s.clients(ctx)
+// checkReminders pushes one message per vehicle the person owns for reminders
+// whose urgency rose since the last push (ok → soon → due → overdue), to that
+// person's own notification target. With force every non-ok reminder is included.
+func (s *Server) checkReminders(ctx context.Context, userID int64, force bool) (int, error) {
+	cl := s.clientsFor(ctx, userID)
 	if !cl.notify.Configured() {
 		return 0, fmt.Errorf("notifications are not configured")
 	}
-	vs, err := s.store.ListVehicles(ctx, store.VehicleFilter{})
+	vs, err := s.store.ListVehicles(ctx, store.VehicleFilter{OwnerID: userID})
 	if err != nil {
 		return 0, err
 	}
@@ -1098,10 +1128,7 @@ func describeReminder(rm *store.Reminder, v *store.Vehicle) string {
 }
 
 func (s *Server) handleNotifyTest(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
-	cl := s.clients(r.Context())
+	cl := s.clientsFor(r.Context(), userFrom(r.Context()).ID)
 	if err := cl.notify.Send(r.Context(), notify.Message{Title: "Pocket Garage", Body: "Test notification. Reminders will arrive like this.", Priority: "info", Tags: []string{"wrench"}}); err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
@@ -1110,10 +1137,7 @@ func (s *Server) handleNotifyTest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNotifyRun(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
-	n, err := s.checkReminders(r.Context(), queryBool(r, "force"))
+	n, err := s.checkReminders(r.Context(), userFrom(r.Context()).ID, queryBool(r, "force"))
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return

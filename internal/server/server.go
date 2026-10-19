@@ -47,9 +47,8 @@ type Server struct {
 	errors   atomic.Int64
 	fx       *fx.Client
 
-	syncMu    sync.Mutex
-	syncing   map[int64]bool
-	notifyDay string
+	syncMu  sync.Mutex
+	syncing map[int64]bool
 
 	oidcMu sync.Mutex
 	oidc   *oidcProvider
@@ -100,49 +99,10 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 		}
 		s.log.Info("admin user created from environment", "email", u.Email)
 	}
-	st, err := s.store.GetSettings(ctx)
-	if err != nil {
-		return err
-	}
-	changed := false
-	set := func(dst *string, v string) {
-		if *dst == "" && v != "" {
-			*dst = v
-			changed = true
-		}
-	}
-	set(&st.FireflyURL, s.cfg.FireflyURL)
-	set(&st.FireflyToken, s.cfg.FireflyToken)
-	set(&st.DawarichURL, s.cfg.DawarichURL)
-	set(&st.DawarichAPIKey, s.cfg.DawarichAPIKey)
-	set(&st.NotifyURL, s.cfg.NotifyURL)
-	set(&st.TravelURL, s.cfg.TravelURL)
-	set(&st.TravelToken, s.cfg.TravelToken)
-	set(&st.TravelPublicURL, s.cfg.TravelPublicURL)
-	set(&st.InventoryURL, s.cfg.InventoryURL)
-	set(&st.InventoryToken, s.cfg.InventoryToken)
-	if s.cfg.NotifyFormat != "" && st.NotifyURL == s.cfg.NotifyURL && st.NotifyFormat != s.cfg.NotifyFormat {
-		st.NotifyFormat = s.cfg.NotifyFormat
-		changed = true
-	}
-	if s.cfg.NotifyHour != 8 && st.NotifyHour == 8 {
-		st.NotifyHour = s.cfg.NotifyHour
-		changed = true
-	}
-	if st.HomeCurrency == "EUR" && s.cfg.DefaultCurrency != "EUR" {
-		st.HomeCurrency = s.cfg.DefaultCurrency
-		changed = true
-	}
-	if st.DistanceUnit == "km" && s.cfg.DistanceUnit != "km" {
-		st.DistanceUnit = s.cfg.DistanceUnit
-		changed = true
-	}
-	if st.VolumeUnit == "l" && s.cfg.VolumeUnit != "l" {
-		st.VolumeUnit = s.cfg.VolumeUnit
-		changed = true
-	}
-	if changed {
-		if err := s.store.SaveSettings(ctx, st); err != nil {
+	// Integrations configured through the environment belong to the box owner
+	// (the first admin): they are seeded into that person's own settings.
+	if owner := s.firstAdmin(ctx); owner != nil {
+		if err := s.seedOwnerSettings(ctx, owner.ID); err != nil {
 			return err
 		}
 	}
@@ -155,6 +115,7 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	if s.cfg.LubeLoggerURL != "" && s.cfg.ImportOnStartup {
 		if counts := s.store.Counts(ctx); counts["vehicles"] == 0 {
 			if owner, err := s.importOwner(ctx); err == nil {
+				st := s.settingsFor(ctx, owner.ID)
 				res := s.importLubeLogger(ctx, lubelogger.New(s.cfg.LubeLoggerURL, s.cfg.LubeLoggerUser, s.cfg.LubeLoggerPass, 60*time.Second), owner.ID, st.HomeCurrency)
 				s.log.Info("lubelogger import on first start", "vehicles", len(res.Vehicles), "error", res.Error)
 			} else {
@@ -190,6 +151,75 @@ func (s *Server) importOwner(ctx context.Context) (*store.User, error) {
 	return nil, errors.New("no users")
 }
 
+// firstAdmin returns the box owner (the oldest admin) without creating anyone.
+func (s *Server) firstAdmin(ctx context.Context) *store.User {
+	users, err := s.store.ListUsers(ctx)
+	if err != nil {
+		return nil
+	}
+	for i := range users {
+		if users[i].Role == "admin" {
+			return &users[i]
+		}
+	}
+	return nil
+}
+
+// seedOwnerSettings fills the owner's empty integration settings from the
+// environment (FIREFLY_URL, DAWARICH_URL, NOTIFY_URL, ...).
+func (s *Server) seedOwnerSettings(ctx context.Context, ownerID int64) error {
+	st := s.settingsFor(ctx, ownerID)
+	changed := false
+	set := func(dst *string, v string) {
+		if *dst == "" && v != "" {
+			*dst = v
+			changed = true
+		}
+	}
+	set(&st.FireflyURL, s.cfg.FireflyURL)
+	set(&st.FireflyToken, s.cfg.FireflyToken)
+	set(&st.DawarichURL, s.cfg.DawarichURL)
+	set(&st.DawarichAPIKey, s.cfg.DawarichAPIKey)
+	set(&st.NotifyURL, s.cfg.NotifyURL)
+	set(&st.TravelURL, s.cfg.TravelURL)
+	set(&st.TravelToken, s.cfg.TravelToken)
+	set(&st.TravelPublicURL, s.cfg.TravelPublicURL)
+	set(&st.InventoryURL, s.cfg.InventoryURL)
+	set(&st.InventoryToken, s.cfg.InventoryToken)
+	if s.cfg.NotifyFormat != "" && st.NotifyURL == s.cfg.NotifyURL && st.NotifyFormat != s.cfg.NotifyFormat {
+		st.NotifyFormat = s.cfg.NotifyFormat
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	return s.store.SaveUserSettings(ctx, ownerID, st)
+}
+
+// settingsFor returns what a person sees: the box-wide settings, the server
+// defaults from the environment, then their own choices on top.
+func (s *Server) settingsFor(ctx context.Context, userID int64) store.Settings {
+	base, _ := s.store.GetSettings(ctx)
+	if s.cfg.DefaultCurrency != "" {
+		base.HomeCurrency = s.cfg.DefaultCurrency
+	}
+	if s.cfg.DistanceUnit != "" {
+		base.DistanceUnit = s.cfg.DistanceUnit
+	}
+	if s.cfg.VolumeUnit != "" {
+		base.VolumeUnit = s.cfg.VolumeUnit
+	}
+	if s.cfg.NotifyFormat != "" {
+		base.NotifyFormat = s.cfg.NotifyFormat
+	}
+	base.NotifyHour = s.cfg.NotifyHour
+	if userID <= 0 {
+		return base
+	}
+	st, _ := s.store.GetUserSettings(ctx, userID, base)
+	return st
+}
+
 // janitor runs the background work: Firefly + Dawarich sync every 30 minutes,
 // the reminder check once a day at the configured hour.
 func (s *Server) janitor(ctx context.Context) {
@@ -211,24 +241,28 @@ func (s *Server) janitor(ctx context.Context) {
 	}
 }
 
-// maybeNotify runs the reminder check once per day once the hour has passed.
+// maybeNotify runs each person's reminder check once per day once their
+// hour has passed, with their own notification target.
 func (s *Server) maybeNotify(ctx context.Context) {
-	st, _ := s.store.GetSettings(ctx)
-	now := time.Now()
-	day := now.Format("2006-01-02")
-	if s.notifyDay == "" {
-		// remember the last run across restarts
-		if v, _, ok := s.store.CacheGet(ctx, "notify:last_day"); ok {
-			s.notifyDay = v
-		}
-	}
-	if s.notifyDay == day || now.Hour() < st.NotifyHour {
+	users, err := s.store.ListUsers(ctx)
+	if err != nil {
 		return
 	}
-	s.notifyDay = day
-	_ = s.store.CachePut(ctx, "notify:last_day", day)
-	if _, err := s.checkReminders(ctx, false); err != nil {
-		s.log.Warn("reminder notifications", "err", err)
+	now := time.Now()
+	day := now.Format("2006-01-02")
+	for _, u := range users {
+		st := s.settingsFor(ctx, u.ID)
+		if st.NotifyURL == "" || now.Hour() < st.NotifyHour {
+			continue
+		}
+		key := fmt.Sprintf("notify:last_day:%d", u.ID)
+		if last, _, ok := s.store.CacheGet(ctx, key); ok && last == day {
+			continue
+		}
+		_ = s.store.CachePut(ctx, key, day)
+		if _, err := s.checkReminders(ctx, u.ID, false); err != nil {
+			s.log.Warn("reminder notifications", "user", u.ID, "err", err)
+		}
 	}
 }
 
@@ -243,8 +277,9 @@ type clients struct {
 	inventory *pocket.Client
 }
 
-func (s *Server) clients(ctx context.Context) clients {
-	st, _ := s.store.GetSettings(ctx)
+// clientsFor builds the integration clients from one person's settings.
+func (s *Server) clientsFor(ctx context.Context, userID int64) clients {
+	st := s.settingsFor(ctx, userID)
 	if st.FireflyURL == "" && st.FireflyToken != "" {
 		if u := s.resolveSibling(ctx, "money"); u != "" {
 			st.FireflyURL = u + "/firefly"
@@ -588,10 +623,15 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 	return nil
 }
 
-// publish sends an event to Core without blocking the request.
-func (s *Server) publish(topic, subject string, payload map[string]any) {
+// publish sends an event to Core without blocking the request. The payload
+// names the person the data belongs to (the vehicle owner) by email, the
+// identity every Pocket app shares, so consumers can keep it per person.
+func (s *Server) publish(ctx context.Context, ownerID int64, topic, subject string, payload map[string]any) {
 	if !s.core.Configured() {
 		return
+	}
+	if u, err := s.store.GetUser(ctx, ownerID); err == nil {
+		payload["user_email"] = u.Email
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

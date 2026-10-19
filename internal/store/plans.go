@@ -208,7 +208,7 @@ func (s *Store) DeleteDocument(ctx context.Context, vehicleID, id int64) (string
 	if err != nil {
 		return "", err
 	}
-	_, err = s.DB.ExecContext(ctx, `DELETE FROM documents WHERE id = ?`, id)
+	_, err = s.DB.ExecContext(ctx, `DELETE FROM documents WHERE id = ? AND vehicle_id = ?`, id, vehicleID)
 	return d.Filename, err
 }
 
