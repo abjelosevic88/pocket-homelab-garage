@@ -423,8 +423,8 @@ func (s *Server) handleVehicleOverview(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"vehicle": v, "reminders": rems, "recent_records": recent, "recent_fuel": fuel, "open_plans": open, "pinned_notes": pinned,
-		"expiring_documents": docs, "months": months, "activity": activity, "trips": s.tripsFor(ctx, cl, userFrom(ctx).ID, v),
-		"integrations": map[string]bool{"firefly": owner.firefly.Configured() && v.FireflyTag != "", "dawarich": owner.dawarich.Configured() && v.Dawarich, "travel": cl.travel.Configured(), "inventory": cl.inventory.Configured(), "notify": cl.notify.Configured()},
+		"expiring_documents": docs, "months": months, "activity": activity, "trips": s.tripsFor(ctx, userFrom(ctx), v),
+		"integrations": map[string]bool{"firefly": owner.firefly.Configured() && v.FireflyTag != "", "dawarich": owner.dawarich.Configured() && v.Dawarich, "travel": s.siblingVia(ctx, userFrom(ctx), "travel", cl.st.TravelToken, travelScopes) != "", "inventory": s.siblingVia(ctx, userFrom(ctx), "inventory", cl.st.InventoryToken, inventoryScopes) != "", "notify": cl.notify.Configured()},
 	})
 }
 

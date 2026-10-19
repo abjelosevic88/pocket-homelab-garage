@@ -164,7 +164,7 @@ export function RecordModal({ vehicle, record, kind = 'service', onClose, onSave
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true)
     const body = { ...f, cost: f.cost || 0, odometer: f.kind === 'expense' ? null : f.odometer || null, parts: f.parts.filter(p => p.name.trim()), ...moneyBody(record?.money_tx_id ? null : mc) }
-    try { const r = record ? await api.put<Rec>(`${V1}/vehicles/${vehicle.id}/records/${record.id}`, body) : await api.post<Rec>(`${V1}/vehicles/${vehicle.id}/records`, body); toast(record ? 'Saved' : `${KIND_LABEL[r.kind]} logged`); moneyWarning(r, toast); onSaved(r) } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+    try { const r = record ? await api.put<Rec>(`${V1}/vehicles/${vehicle.id}/records/${record.id}`, body) : await api.post<Rec>(`${V1}/vehicles/${vehicle.id}/records`, body); toast(record ? 'Saved' : `${KIND_LABEL[r.kind]} logged`); moneyWarning(r, toast); if (r.inventory_error) toast(`Saved, but ${r.inventory_error}`, 'err'); onSaved(r) } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
   const setPart = (i: number, patch: Partial<Part>) => set('parts', f.parts.map((p, j) => j === i ? { ...p, ...patch } : p))
   return (
@@ -185,7 +185,8 @@ export function RecordModal({ vehicle, record, kind = 'service', onClose, onSave
           <div className="parts">
             {f.parts.map((p, i) => (
               <div key={i} className="part">
-                <input value={p.name} onChange={e => { setPart(i, { name: e.target.value }); setInvQ(e.target.value) }} placeholder="Oil filter" list={settings?.inventory_configured ? `inv-${i}` : undefined} />
+                <span className="part-name"><input value={p.name} onChange={e => { const hit = inv?.items.find(it => it.name === e.target.value); setPart(i, { name: e.target.value, inventory_id: hit?.id }); setInvQ(e.target.value) }} placeholder="Oil filter" list={settings?.inventory_configured ? `inv-${i}` : undefined} />
+                  {p.inventory_id ? <span className="part-inv" title={settings?.inventory_take ? 'From Pocket Inventory: taken off the shelf when you save' : 'From Pocket Inventory'}>📦</span> : null}</span>
                 {settings?.inventory_configured && <datalist id={`inv-${i}`}>{(inv?.items || []).map(it => <option key={it.id} value={it.name}>{`${it.quantity} ${it.unit || ''} on hand`}</option>)}</datalist>}
                 <input type="number" step="0.01" value={p.qty || ''} onChange={e => setPart(i, { qty: Number(e.target.value) })} placeholder="qty" />
                 <input className="partno" value={p.part_no} onChange={e => setPart(i, { part_no: e.target.value })} placeholder="part no." />

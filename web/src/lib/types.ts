@@ -10,7 +10,8 @@ export interface Settings {
   dawarich_url: string; dawarich_api_key: string; dawarich_configured: boolean
   notify_url: string; notify_format: string; notify_hour: number; notify_digest: boolean; notify_configured: boolean
   travel_url: string; travel_public_url: string; travel_token: string; travel_configured: boolean
-  inventory_url: string; inventory_token: string; inventory_configured: boolean
+  inventory_url: string; inventory_token: string; inventory_configured: boolean; inventory_take: boolean
+  travel_via: '' | 'core' | 'token'; inventory_via: '' | 'core' | 'token'
   money_enabled: boolean; money_url: string; money_token: string; money_account: number; money_category_fuel: number; money_category: number
   max_upload_bytes: number; setup_complete: boolean; base_url: string
 }
@@ -46,7 +47,7 @@ export interface Rec {
   id: number; vehicle_id: number; kind: 'service' | 'repair' | 'upgrade' | 'expense'; category: string; date: string; odometer: number | null
   description: string; notes: string; vendor: string; cost: number; currency: string; cost_home: number; fx_rate: number; parts: Part[]
   tags: string; source: string; external_id: string; firefly_id: string; created_at: string; updated_at: string
-  money_tx_id: number | null; money_error?: string
+  money_tx_id: number | null; money_error?: string; inventory_error?: string
 }
 
 export interface Fuel {

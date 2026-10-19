@@ -32,6 +32,8 @@ Base path `/api/v1`. JSON in and out. Authenticate with the session cookie (brow
 
 Fields: `kind`, `category`, `date`, `odometer` (null = none), `description`, `notes`, `vendor`, `cost`, `currency`, `fx_rate`, `parts: [{name, qty, cost, part_no, inventory_id, link}]`, `tags`. Response adds `cost_home` (vehicle currency), `source`, `firefly_id`, `money_tx_id`.
 
+**Pocket Inventory.** A part with `inventory_id` (picked from Pocket Inventory) comes off the person's shelf when the record is created, an edit of `parts` takes or returns the difference, deleting the record puts it back (setting `inventory_take`, on by default). The movement's note is `Pocket Garage: <vehicle> · <description>`. Failures don't fail the save: the response carries `inventory_error`.
+
 **Pocket Money.** Create and update (records, fill-ups, reminder *done* and plan *done*) take `money` (book it; absent = the person's `money_enabled` setting), `money_account` and `money_category`. The transaction goes into the Money of whoever logs it. A failed booking does not fail the save: the response carries `money_error`. Later edits to date, cost, currency, description, vendor (fuel: station, volume) update the transaction, a cost of 0 removes it, and deleting the record or fill-up deletes it. A transaction deleted in Money unlinks quietly.
 
 ### Fuel
@@ -59,7 +61,7 @@ Fields: `title`, `notes`, `kind` (what "done" logs; `none` for a plain reminder)
 | GET | `/money?vehicle=` | `{connected, via: core\|token, error, enabled, offer, core, url, accounts, default_account}`: whether forms offer the option and where it books |
 | GET | `/money/categories?account=` | expense categories usable on that Money account |
 | POST | `/vehicles/{id}/dawarich/sync` · GET `/dawarich/days?from=&to=` | |
-| GET | `/inventory/search?q=` | Pocket Inventory items |
+| GET | `/inventory/search?q=` | the person's Pocket Inventory items `{items, url}` (through a Core link, or the token in Settings); `{items: [], error}` when not connected |
 | POST | `/integrations/test` | `{which: money|firefly|dawarich|notify|travel|inventory|lubelogger, url, key, username, password, format}` |
 | POST | `/notify/test` · `/notify/run?force=1` | |
 | POST | `/import/lubelogger/vehicles` · `/import/lubelogger` | `{url, username, password, currency, vehicles:[ids]}` |

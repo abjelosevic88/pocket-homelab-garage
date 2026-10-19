@@ -4,6 +4,7 @@
 package pocket
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -154,4 +155,39 @@ func (c *Client) SearchItems(ctx context.Context, q string, limit int) ([]Item, 
 		list = wrap.Items
 	}
 	return list, nil
+}
+
+// Adjust changes an item's quantity by delta (negative = taken off the
+// shelf) and records the note as the movement's reason.
+func (c *Client) Adjust(ctx context.Context, id int64, delta float64, note string) (*Item, error) {
+	if !c.Configured() {
+		return nil, errors.New("not configured")
+	}
+	b, _ := json.Marshal(map[string]any{"delta": delta, "note": note})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/api/v1/items/%d/adjust", c.BaseURL, id), bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	res, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	switch {
+	case res.StatusCode == http.StatusNotFound:
+		return nil, fmt.Errorf("item %d is not in your Pocket Inventory", id)
+	case res.StatusCode == http.StatusUnauthorized:
+		return nil, errors.New("token rejected (401)")
+	case res.StatusCode >= 300:
+		var e struct {
+			Error string `json:"error"`
+		}
+		_ = json.NewDecoder(res.Body).Decode(&e)
+		return nil, fmt.Errorf("HTTP %d %s", res.StatusCode, e.Error)
+	}
+	var it Item
+	return &it, json.NewDecoder(res.Body).Decode(&it)
 }

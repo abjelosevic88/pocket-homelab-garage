@@ -18,11 +18,11 @@ var PersonalKeys = []string{"home_currency", "date_format", "time_format", "dist
 	"firefly_url", "firefly_token", "firefly_category", "firefly_account", "firefly_auto_sync",
 	"dawarich_url", "dawarich_api_key", "notify_url", "notify_format", "notify_hour", "notify_digest",
 	"travel_url", "travel_token", "travel_public_url", "inventory_url", "inventory_token",
-	"money_enabled", "money_url", "money_token", "money_account", "money_category_fuel", "money_category", "money_vehicle_accounts"}
+	"inventory_take", "money_enabled", "money_url", "money_token", "money_account", "money_category_fuel", "money_category", "money_vehicle_accounts"}
 
 // DefaultSettings returns the built-in defaults.
 func DefaultSettings() Settings {
-	return Settings{Title: DefaultTitle, HomeCurrency: "EUR", DateFormat: "auto", TimeFormat: "auto", DistanceUnit: "km", VolumeUnit: "l", EconomyUnit: "l100", FXAuto: true, FireflyAutoSync: true, NotifyFormat: "apprise", NotifyHour: 8, NotifyDigest: true, MoneyEnabled: true}
+	return Settings{Title: DefaultTitle, HomeCurrency: "EUR", DateFormat: "auto", TimeFormat: "auto", DistanceUnit: "km", VolumeUnit: "l", EconomyUnit: "l100", FXAuto: true, FireflyAutoSync: true, NotifyFormat: "apprise", NotifyHour: 8, NotifyDigest: true, MoneyEnabled: true, InventoryTake: true}
 }
 
 func applySetting(st *Settings, k, v string, global bool) {
@@ -100,6 +100,8 @@ func applySetting(st *Settings, k, v string, global bool) {
 		st.InventoryURL = v
 	case "inventory_token":
 		st.InventoryToken = v
+	case "inventory_take":
+		st.InventoryTake = v != "0"
 	case "money_enabled":
 		st.MoneyEnabled = v != "0"
 	case "money_url":
@@ -184,6 +186,7 @@ func settingsKV(st Settings) map[string]string {
 		"travel_public_url":      st.TravelPublicURL,
 		"inventory_url":          st.InventoryURL,
 		"inventory_token":        st.InventoryToken,
+		"inventory_take":         b[st.InventoryTake],
 		"money_enabled":          b[st.MoneyEnabled],
 		"money_url":              st.MoneyURL,
 		"money_token":            st.MoneyToken,

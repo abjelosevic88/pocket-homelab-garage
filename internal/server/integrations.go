@@ -43,16 +43,19 @@ func mask(s string) string {
 	return s[:4] + "••••" + s[len(s)-4:]
 }
 
-func (s *Server) publicSettings(st store.Settings) map[string]any {
+func (s *Server) publicSettings(ctx context.Context, u *store.User, st store.Settings) map[string]any {
+	travelVia := s.siblingVia(ctx, u, "travel", st.TravelToken, travelScopes)
+	inventoryVia := s.siblingVia(ctx, u, "inventory", st.InventoryToken, inventoryScopes)
 	return map[string]any{
+		"travel_via": travelVia, "inventory_via": inventoryVia, "inventory_take": st.InventoryTake,
 		"title": st.Title, "home_currency": st.HomeCurrency, "date_format": st.DateFormat, "time_format": st.TimeFormat,
 		"distance_unit": st.DistanceUnit, "volume_unit": st.VolumeUnit, "economy_unit": st.EconomyUnit, "fx_auto": st.FXAuto, "fx_provider": s.cfg.FXProvider,
 		"firefly_url": st.FireflyURL, "firefly_token": mask(st.FireflyToken), "firefly_configured": st.FireflyURL != "" && st.FireflyToken != "",
 		"firefly_category": st.FireflyCategory, "firefly_account": st.FireflyAccount, "firefly_auto_sync": st.FireflyAutoSync,
 		"dawarich_url": st.DawarichURL, "dawarich_api_key": mask(st.DawarichAPIKey), "dawarich_configured": st.DawarichURL != "" && st.DawarichAPIKey != "",
 		"notify_url": st.NotifyURL, "notify_format": st.NotifyFormat, "notify_hour": st.NotifyHour, "notify_digest": st.NotifyDigest, "notify_configured": st.NotifyURL != "",
-		"travel_url": st.TravelURL, "travel_public_url": st.TravelPublicURL, "travel_token": mask(st.TravelToken), "travel_configured": st.TravelURL != "" && st.TravelToken != "",
-		"inventory_url": st.InventoryURL, "inventory_token": mask(st.InventoryToken), "inventory_configured": st.InventoryURL != "" && st.InventoryToken != "",
+		"travel_url": st.TravelURL, "travel_public_url": st.TravelPublicURL, "travel_token": mask(st.TravelToken), "travel_configured": travelVia != "",
+		"inventory_url": st.InventoryURL, "inventory_token": mask(st.InventoryToken), "inventory_configured": inventoryVia != "",
 		"money_enabled": st.MoneyEnabled, "money_url": st.MoneyURL, "money_token": mask(st.MoneyToken), "money_account": st.MoneyAccount,
 		"money_category_fuel": st.MoneyCategoryFuel, "money_category": st.MoneyCategory,
 		"max_upload_bytes": s.cfg.MaxUploadBytes, "setup_complete": st.SetupComplete, "base_url": s.cfg.BaseURL,
@@ -61,7 +64,8 @@ func (s *Server) publicSettings(st store.Settings) map[string]any {
 
 // handleGetSettings returns the caller's own settings over the box-wide ones.
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.publicSettings(s.settingsFor(r.Context(), userFrom(r.Context()).ID)))
+	u := userFrom(r.Context())
+	writeJSON(w, http.StatusOK, s.publicSettings(r.Context(), u, s.settingsFor(r.Context(), u.ID)))
 }
 
 // handlePutSettings saves the caller's own preferences and integrations;
@@ -151,6 +155,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	secret("travel_token", &cur.TravelToken, in.TravelToken)
 	url("inventory_url", &cur.InventoryURL, in.InventoryURL)
 	secret("inventory_token", &cur.InventoryToken, in.InventoryToken)
+	if keys["inventory_take"] {
+		cur.InventoryTake = in.InventoryTake
+	}
 	if keys["money_enabled"] {
 		cur.MoneyEnabled = in.MoneyEnabled
 	}
@@ -176,7 +183,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.CacheDelete(r.Context(), fmt.Sprintf("travel:trips:%d", u.ID))
-	writeJSON(w, http.StatusOK, s.publicSettings(s.settingsFor(r.Context(), u.ID)))
+	writeJSON(w, http.StatusOK, s.publicSettings(r.Context(), u, s.settingsFor(r.Context(), u.ID)))
 }
 
 // handleIntegrationTest checks a connection with the caller's own saved settings
@@ -236,14 +243,30 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 		n := notify.New(urlOr(st.NotifyURL), f)
 		err = n.Send(ctx, notify.Message{Title: "Pocket Garage", Body: "Notifications work. Reminders will arrive here.", Priority: "info", Tags: []string{"wrench"}})
 		msg = "Test message sent via " + n.Format
-	case "travel":
+	case "travel", "inventory":
+		name := map[string]string{"travel": "Pocket Travel", "inventory": "Pocket Inventory"}[in.Which]
+		saved := map[string][2]string{"travel": {st.TravelURL, st.TravelToken}, "inventory": {st.InventoryURL, st.InventoryToken}}[in.Which]
 		var v string
-		v, err = pocket.New(urlOr(st.TravelURL), keyOr(st.TravelToken), 15*time.Second).Health(ctx)
-		msg = "Pocket Travel " + v
-	case "inventory":
-		var v string
-		v, err = pocket.New(urlOr(st.InventoryURL), keyOr(st.InventoryToken), 15*time.Second).Health(ctx)
-		msg = "Pocket Inventory " + v
+		if tok := keyOr(saved[1]); tok != "" {
+			base := urlOr(saved[0])
+			if base == "" {
+				base = s.resolveSibling(ctx, in.Which)
+			}
+			v, err = pocket.New(base, tok, 15*time.Second).Health(ctx)
+			msg = name + " " + v + " with your token"
+		} else {
+			u := userFrom(r.Context())
+			var conn *siblingConn
+			if in.Which == "travel" {
+				conn, err = s.travelFor(ctx, u)
+			} else {
+				conn, err = s.inventoryFor(ctx, u)
+			}
+			if err == nil {
+				v, err = conn.client.Health(ctx)
+				msg = name + " " + v + " through Pocket Core"
+			}
+		}
 	case "money":
 		var accts []money.Account
 		if tok := keyOr(st.MoneyToken); tok != "" {
@@ -937,33 +960,46 @@ func (s *Server) handleDawarichDays(w http.ResponseWriter, r *http.Request) {
 
 // ---- Pocket Travel ----
 
-// trips returns a person's cached trip list (refreshed hourly).
-func (s *Server) trips(ctx context.Context, cl clients, userID int64) []pocket.Trip {
-	if !cl.travel.Configured() {
-		return nil
+type cachedTrips struct {
+	Trips  []pocket.Trip `json:"trips"`
+	Public string        `json:"public"`
+}
+
+// trips returns a person's cached trip list (refreshed hourly) and where
+// their Pocket Travel opens in a browser.
+func (s *Server) trips(ctx context.Context, u *store.User) ([]pocket.Trip, string) {
+	if u == nil {
+		return nil, ""
 	}
-	key := fmt.Sprintf("travel:trips:%d", userID)
+	key := fmt.Sprintf("travel:trips:%d", u.ID)
 	if val, at, ok := s.store.CacheGet(ctx, key); ok {
 		if t, err := time.Parse(time.RFC3339Nano, at); err == nil && time.Since(t) < time.Hour {
-			var out []pocket.Trip
-			if json.Unmarshal([]byte(val), &out) == nil {
-				return out
+			var c cachedTrips
+			if json.Unmarshal([]byte(val), &c) == nil && c.Trips != nil {
+				return c.Trips, c.Public
 			}
 		}
 	}
-	trips, err := cl.travel.Trips(ctx)
+	conn, err := s.travelFor(ctx, u)
 	if err != nil {
-		s.log.Warn("pocket travel", "err", err)
-		return nil
+		return nil, ""
 	}
-	b, _ := json.Marshal(trips)
+	trips, err := conn.client.Trips(ctx)
+	if err != nil {
+		s.log.Warn("pocket travel", "via", conn.via, "err", err)
+		return nil, ""
+	}
+	if trips == nil {
+		trips = []pocket.Trip{}
+	}
+	b, _ := json.Marshal(cachedTrips{Trips: trips, Public: conn.public})
 	_ = s.store.CachePut(ctx, key, string(b))
-	return trips
+	return trips, conn.public
 }
 
 // tripsFor lists the viewer's own trips with what this vehicle spent during each.
-func (s *Server) tripsFor(ctx context.Context, cl clients, userID int64, v *store.Vehicle) []map[string]any {
-	trips := s.trips(ctx, cl, userID)
+func (s *Server) tripsFor(ctx context.Context, u *store.User, v *store.Vehicle) []map[string]any {
+	trips, public := s.trips(ctx, u)
 	out := []map[string]any{}
 	if len(trips) == 0 {
 		return out
@@ -1001,7 +1037,7 @@ func (s *Server) tripsFor(ctx context.Context, cl clients, userID int64, v *stor
 			continue
 		}
 		link := ""
-		if base := firstNonEmpty(cl.st.TravelPublicURL, cl.st.TravelURL); base != "" {
+		if base := public; base != "" {
 			link = fmt.Sprintf("%s/trips/%d", base, t.ID)
 		}
 		out = append(out, map[string]any{"id": t.ID, "name": t.Name, "destination": t.Destination, "start_date": t.StartDate, "end_date": t.EndDate, "color": t.Color, "fuel_cost": fuelCost, "other_cost": otherCost, "litres": litres, "fills": fills, "km": km, "link": link})
@@ -1019,19 +1055,18 @@ func firstNonEmpty(a, b string) string {
 
 func (s *Server) handleVehicleTrips(w http.ResponseWriter, r *http.Request) {
 	v := vehicleFrom(r.Context()).vehicle
-	uid := userFrom(r.Context()).ID
-	writeJSON(w, http.StatusOK, s.tripsFor(r.Context(), s.clientsFor(r.Context(), uid), uid, v))
+	writeJSON(w, http.StatusOK, s.tripsFor(r.Context(), userFrom(r.Context()), v))
 }
 
 // ---- Pocket Inventory ----
 
 func (s *Server) handleInventorySearch(w http.ResponseWriter, r *http.Request) {
-	cl := s.clientsFor(r.Context(), userFrom(r.Context()).ID)
-	if !cl.inventory.Configured() {
-		writeJSON(w, http.StatusOK, []pocket.Item{})
+	conn, err := s.inventoryFor(r.Context(), userFrom(r.Context()))
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"items": []pocket.Item{}, "error": err.Error()})
 		return
 	}
-	items, err := cl.inventory.SearchItems(r.Context(), strings.TrimSpace(r.URL.Query().Get("q")), 15)
+	items, err := conn.client.SearchItems(r.Context(), strings.TrimSpace(r.URL.Query().Get("q")), 15)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
@@ -1039,7 +1074,7 @@ func (s *Server) handleInventorySearch(w http.ResponseWriter, r *http.Request) {
 	if items == nil {
 		items = []pocket.Item{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "url": cl.st.InventoryURL})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "url": conn.public})
 }
 
 // ---- notifications ----

@@ -166,6 +166,8 @@ type Record struct {
 	MoneyTxID   *int64   `json:"money_tx_id"`
 	MoneyUserID *int64   `json:"money_user_id"`
 	MoneyError  string   `json:"money_error,omitempty"` // set on the response when booking in Pocket Money failed
+	// InventoryError: parts picked from Pocket Inventory could not be moved (response only)
+	InventoryError string `json:"inventory_error,omitempty"`
 }
 
 // Part is one line inside a record: what was fitted or used.
@@ -354,6 +356,7 @@ type Settings struct {
 	TravelPublicURL string `json:"travel_public_url"` // what the browser opens when travel_url is internal
 	InventoryURL    string `json:"inventory_url"`
 	InventoryToken  string `json:"inventory_token"`
+	InventoryTake   bool   `json:"inventory_take"` // parts picked from Pocket Inventory come off the shelf
 	// Pocket Money: through a Pocket Core link, or a Money URL + token without Core.
 	MoneyEnabled      bool   `json:"money_enabled"` // offer "Create a transaction" (ticked) when adding costs
 	MoneyURL          string `json:"money_url"`

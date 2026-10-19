@@ -98,6 +98,7 @@ function Integrations() {
     try { const r = await api.post<{ ok: boolean; message?: string; error?: string }>(`${V1}/integrations/test`, { which, url, key, ...extra }); setTest(t => ({ ...t, [which]: r.ok ? `✓ ${r.message}` : `✕ ${r.error}` })) } catch (e) { setTest(t => ({ ...t, [which]: `✕ ${(e as Error).message}` })) }
   }
   const status = (which: string) => <span className={`small ${test[which]?.startsWith('✓') ? 'ok' : test[which]?.startsWith('✕') ? 'bad' : 'muted'}`}>{test[which]}</span>
+  const viaBadge = (via: string) => <span className={`badge ${via ? 'cat' : ''}`}>{via === 'core' ? 'connected through Pocket Core' : via === 'token' ? 'connected with a token' : 'not connected'}</span>
   const badge = (on: boolean) => <span className={`badge ${on ? 'cat' : ''}`}>{on ? 'connected' : 'not set'}</span>
   const notifyRun = async () => { try { const r = await api.post<{ sent: number }>(`${V1}/notify/run?force=1`); toast(`${r.sent} message${r.sent === 1 ? '' : 's'} sent`) } catch (e) { toast((e as Error).message, 'err') } }
   return (
@@ -138,25 +139,26 @@ function Integrations() {
           <div className="row"><button className="btn sm" onClick={() => run('notify', f.notify_url, '', { format: f.notify_format })} disabled={!f.notify_url}>Send a test</button>{f.notify_configured && <button className="btn sm" onClick={notifyRun}>Push everything due now</button>}{status('notify')}</div>
         </div>
       </Card>
-      <Card title="🧳 Pocket Travel" actions={badge(f.travel_configured)}>
-        <p className="muted small">Fill-ups and costs that fall inside a trip show up on the vehicle overview per trip, with the kilometres driven. Create a token in Pocket Travel under Settings → API tokens.</p>
+      <Card title="🧳 Pocket Travel" actions={viaBadge(f.travel_via)}>
+        <p className="muted small">Fill-ups and costs that fall inside a trip show up on the vehicle overview per trip, with the kilometres driven. With Pocket Core on the box there is nothing to fill in: your own trips come through Core. A token from Pocket Travel (Settings → API tokens) entered here takes priority; clear it to go back to Core.</p>
         <div className="grid" style={{ gap: 12 }}>
           <div className="two-col tight">
             <Field label="URL"><input value={f.travel_url} onChange={e => setF({ ...f, travel_url: e.target.value })} placeholder="http://host.docker.internal:8174" /></Field>
             <Field label="API token"><input value={f.travel_token} onChange={e => setF({ ...f, travel_token: e.target.value })} autoComplete="off" /></Field>
           </div>
           <Field label="Public URL (optional)" help="What the browser opens for trip links when the URL above is internal (e.g. host.docker.internal)."><input value={f.travel_public_url} onChange={e => setF({ ...f, travel_public_url: e.target.value })} placeholder="https://travel.example.com" /></Field>
-          <div className="row"><button className="btn sm" onClick={() => run('travel', f.travel_url, f.travel_token)} disabled={!f.travel_url}>Test connection</button>{status('travel')}</div>
+          <div className="row"><button className="btn sm" onClick={() => run('travel', f.travel_url, f.travel_token)} >Test connection</button>{status('travel')}</div>
         </div>
       </Card>
-      <Card title="📦 Pocket Inventory" actions={badge(f.inventory_configured)}>
-        <p className="muted small">Parts and fluids on the shelf. When you list parts on a record, the name field suggests inventory items. Token from Pocket Inventory → Settings → API tokens.</p>
+      <Card title="📦 Pocket Inventory" actions={viaBadge(f.inventory_via)}>
+        <p className="muted small">Parts and fluids on the shelf. When you list parts on a record, the name field suggests your inventory items. With Pocket Core on the box there is nothing to fill in; a token from Pocket Inventory (Settings → API tokens) entered here takes priority, clear it to go back to Core.</p>
         <div className="grid" style={{ gap: 12 }}>
           <div className="two-col tight">
             <Field label="URL"><input value={f.inventory_url} onChange={e => setF({ ...f, inventory_url: e.target.value })} placeholder="http://host.docker.internal:8170" /></Field>
             <Field label="API token"><input value={f.inventory_token} onChange={e => setF({ ...f, inventory_token: e.target.value })} autoComplete="off" /></Field>
           </div>
-          <div className="row"><button className="btn sm" onClick={() => run('inventory', f.inventory_url, f.inventory_token)} disabled={!f.inventory_url}>Test connection</button>{status('inventory')}</div>
+          <div className="row"><button className="btn sm" onClick={() => run('inventory', f.inventory_url, f.inventory_token)} >Test connection</button>{status('inventory')}</div>
+          <label className="row"><input type="checkbox" checked={f.inventory_take} onChange={e => setF({ ...f, inventory_take: e.target.checked })} style={{ width: 'auto' }} /> Take parts picked from Pocket Inventory off the shelf when the work is logged (edits adjust the difference, deleting the record puts them back)</label>
         </div>
       </Card>
       <div><button className="btn primary" onClick={() => save()} disabled={busy}>Save integrations</button></div>

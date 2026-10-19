@@ -130,6 +130,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 	s.store.LogActivity(r.Context(), v.ID, uid, "added "+rec.Kind, rec.Description)
 	s.afterRecordChange(r.Context(), v, rec)
 	s.bookRecord(r.Context(), userFrom(r.Context()), v, rec, in.moneyChoice)
+	rec.InventoryError = s.takeParts(r.Context(), userFrom(r.Context()), v, rec.Description, nil, rec.Parts)
 	s.publish(r.Context(), v.OwnerID, "garage.service_logged", fmt.Sprintf("record:%d", rec.ID), map[string]any{
 		"record_id": rec.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "kind": rec.Kind, "category": rec.Category,
 		"description": rec.Description, "date": rec.Date, "odometer": rec.Odometer, "cost": rec.Cost, "currency": rec.Currency,
@@ -195,6 +196,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
+	partsBefore := append([]store.Part(nil), rec.Parts...)
 	if msg := s.applyRecord(r.Context(), v, rec, in, keys); msg != "" {
 		writeErr(w, http.StatusBadRequest, msg)
 		return
@@ -211,6 +213,9 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		})
 	} else if in.Money != nil && *in.Money {
 		s.bookRecord(r.Context(), userFrom(r.Context()), v, rec, in.moneyChoice)
+	}
+	if keys["parts"] {
+		rec.InventoryError = s.takeParts(r.Context(), userFrom(r.Context()), v, rec.Description, partsBefore, rec.Parts)
 	}
 	writeJSON(w, http.StatusOK, rec)
 }
@@ -231,6 +236,7 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.LogActivity(r.Context(), v.ID, userFrom(r.Context()).ID, "deleted "+rec.Kind, rec.Description)
 	s.unbookMoney(r.Context(), v.ID, rec.MoneyTxID, rec.MoneyUserID)
+	s.takeParts(r.Context(), userFrom(r.Context()), v, rec.Description+" (deleted)", rec.Parts, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -170,22 +170,32 @@ func (s *Server) firstAdmin(ctx context.Context) *store.User {
 func (s *Server) seedOwnerSettings(ctx context.Context, ownerID int64) error {
 	st := s.settingsFor(ctx, ownerID)
 	changed := false
-	set := func(dst *string, v string) {
+	// Each value is copied once: clearing it in Settings (to switch Travel or
+	// Inventory over to Pocket Core, say) must not bring it back at the next
+	// start. A value already there counts as copied.
+	set := func(name string, dst *string, v string) {
+		key := fmt.Sprintf("seeded:%d:%s", ownerID, name)
+		if _, _, done := s.store.CacheGet(ctx, key); done {
+			return
+		}
 		if *dst == "" && v != "" {
 			*dst = v
 			changed = true
 		}
+		if *dst != "" {
+			_ = s.store.CachePut(ctx, key, "1")
+		}
 	}
-	set(&st.FireflyURL, s.cfg.FireflyURL)
-	set(&st.FireflyToken, s.cfg.FireflyToken)
-	set(&st.DawarichURL, s.cfg.DawarichURL)
-	set(&st.DawarichAPIKey, s.cfg.DawarichAPIKey)
-	set(&st.NotifyURL, s.cfg.NotifyURL)
-	set(&st.TravelURL, s.cfg.TravelURL)
-	set(&st.TravelToken, s.cfg.TravelToken)
-	set(&st.TravelPublicURL, s.cfg.TravelPublicURL)
-	set(&st.InventoryURL, s.cfg.InventoryURL)
-	set(&st.InventoryToken, s.cfg.InventoryToken)
+	set("FireflyURL", &st.FireflyURL, s.cfg.FireflyURL)
+	set("FireflyToken", &st.FireflyToken, s.cfg.FireflyToken)
+	set("DawarichURL", &st.DawarichURL, s.cfg.DawarichURL)
+	set("DawarichAPIKey", &st.DawarichAPIKey, s.cfg.DawarichAPIKey)
+	set("NotifyURL", &st.NotifyURL, s.cfg.NotifyURL)
+	set("TravelURL", &st.TravelURL, s.cfg.TravelURL)
+	set("TravelToken", &st.TravelToken, s.cfg.TravelToken)
+	set("TravelPublicURL", &st.TravelPublicURL, s.cfg.TravelPublicURL)
+	set("InventoryURL", &st.InventoryURL, s.cfg.InventoryURL)
+	set("InventoryToken", &st.InventoryToken, s.cfg.InventoryToken)
 	if s.cfg.NotifyFormat != "" && st.NotifyURL == s.cfg.NotifyURL && st.NotifyFormat != s.cfg.NotifyFormat {
 		st.NotifyFormat = s.cfg.NotifyFormat
 		changed = true
@@ -610,7 +620,11 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		Icon:        "/favicon.svg", Version: Version,
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "GARAGE",
 		Publishes: []string{"garage.fuel_logged", "garage.service_logged", "garage.odometer_updated"},
-		Uses:      []core.Use{{App: "money", Scopes: moneyScopes, Reason: "Book fuel, service, repairs and other car costs as transactions in Pocket Money"}},
+		Uses: []core.Use{
+			{App: "money", Scopes: moneyScopes, Reason: "Book fuel, service, repairs and other car costs as transactions in Pocket Money"},
+			{App: "travel", Scopes: travelScopes, Reason: "Show the fuel, costs and kilometres of each trip on the vehicle"},
+			{App: "inventory", Scopes: inventoryScopes, Reason: "Offer parts and fluids from your shelf on a service record and take the ones you fitted off it"},
+		},
 	}
 	if s.cfg.BaseURL != "" {
 		// ask Core for a relying-party client so "Sign in with Pocket Core" needs no configuration

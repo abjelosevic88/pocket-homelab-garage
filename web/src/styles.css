@@ -572,3 +572,9 @@ html, body { overflow-x: hidden; }
   input[type="date"], input[type="time"], input[type="datetime-local"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; min-height: 42px; display: block; }
   input::-webkit-date-and-time-value { text-align: left; }
 }
+
+/* a part picked from Pocket Inventory */
+.part-name { position: relative; display: block; min-width: 0; }
+.part-name input { width: 100%; }
+.part-name .part-inv { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 14px; pointer-events: auto; cursor: help; }
+.part-name:has(.part-inv) input { padding-right: 30px; }
