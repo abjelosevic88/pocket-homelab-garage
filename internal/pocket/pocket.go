@@ -159,7 +159,7 @@ func (c *Client) SearchItems(ctx context.Context, q string, limit int) ([]Item, 
 
 // Adjust changes an item's quantity by delta (negative = taken off the
 // shelf) and records the note as the movement's reason.
-func (c *Client) Adjust(ctx context.Context, id int64, delta float64, note string) (*Item, error) {
+func (c *Client) Adjust(ctx context.Context, id int64, delta float64, note string, operation ...string) (*Item, error) {
 	if !c.Configured() {
 		return nil, errors.New("not configured")
 	}
@@ -171,6 +171,9 @@ func (c *Client) Adjust(ctx context.Context, id int64, delta float64, note strin
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	if len(operation) > 0 {
+		req.Header.Set("Idempotency-Key", operation[0])
+	}
 	res, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err

@@ -36,6 +36,7 @@ var Version = "dev"
 
 // Server holds dependencies.
 type Server struct {
+	actionMu sync.Mutex
 	cfg      *config.Config
 	store    *store.Store
 	log      *slog.Logger
@@ -128,6 +129,7 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	}
 	_ = s.store.PurgeSessions(ctx)
 	go s.janitor(ctx)
+	go s.actionsLoop(ctx)
 	if s.core.Configured() {
 		go s.coreLoop(ctx)
 		go s.modesLoop(ctx)
@@ -637,19 +639,6 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 // publish persists an event locally; the SDK retries network delivery. The payload
 // names the person the data belongs to (the vehicle owner) by email, the
 // identity every Pocket app shares, so consumers can keep it per person.
-func (s *Server) publish(ctx context.Context, ownerID int64, topic, subject string, payload map[string]any) {
-	if !s.core.Configured() {
-		return
-	}
-	if u, err := s.store.GetUser(ctx, ownerID); err == nil {
-		payload["user_email"] = u.Email
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := s.core.Publish(ctx, topic, subject, payload); err != nil {
-		s.log.Warn("pocket core: outbox enqueue failed", "topic", topic, "err", err)
-	}
-}
 
 // resolveSibling asks Core where a sibling app lives (cached a minute) so the
 // *_URL settings may stay empty on a box with Core.

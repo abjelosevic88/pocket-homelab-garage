@@ -2,20 +2,26 @@ package store
 
 import (
 	"context"
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"sort"
 )
 
 // CreateOdometer inserts a standalone reading.
-func (s *Store) CreateOdometer(ctx context.Context, o *OdometerReading) error {
+func (s *Store) CreateOdometer(ctx context.Context, o *OdometerReading, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	if o.Source == "" {
 		o.Source = "manual"
 	}
-	res, err := s.DB.ExecContext(ctx, `INSERT INTO odometer (vehicle_id, date, reading, notes, source, external_id) VALUES (?, ?, ?, ?, ?, ?)`, o.VehicleID, o.Date, o.Reading, o.Notes, o.Source, o.ExternalID)
+	res, err := tx.ExecContext(ctx, `INSERT INTO odometer (vehicle_id, date, reading, notes, source, external_id) VALUES (?, ?, ?, ?, ?, ?)`, o.VehicleID, o.Date, o.Reading, o.Notes, o.Source, o.ExternalID)
 	if err != nil {
 		return conflict(err)
 	}
 	o.ID, _ = res.LastInsertId()
-	return nil
+	return core.Commit(tx, after...)
 }
 
 // UpdateOdometer saves a standalone reading.

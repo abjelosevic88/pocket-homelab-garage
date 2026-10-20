@@ -123,18 +123,20 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, msg)
 		return
 	}
-	if err := s.store.CreateRecord(r.Context(), rec); err != nil {
+	if err := s.store.CreateRecord(r.Context(), rec, s.ownerEvent(r.Context(), v.OwnerID, func() (string, string, map[string]any) {
+		return "garage.service_logged", fmt.Sprintf("record:%d", rec.ID), map[string]any{
+			"record_id": rec.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "kind": rec.Kind, "category": rec.Category,
+			"description": rec.Description, "date": rec.Date, "odometer": rec.Odometer, "cost": rec.Cost, "currency": rec.Currency,
+		}
+	}), s.partsActions(r.Context(), userFrom(r.Context()), v, rec.Description, nil, rec.Parts)); err != nil {
 		s.fail(w, err, "create record")
 		return
 	}
 	s.store.LogActivity(r.Context(), v.ID, uid, "added "+rec.Kind, rec.Description)
 	s.afterRecordChange(r.Context(), v, rec)
 	s.bookRecord(r.Context(), userFrom(r.Context()), v, rec, in.moneyChoice)
-	rec.InventoryError = s.takeParts(r.Context(), userFrom(r.Context()), v, rec.Description, nil, rec.Parts)
-	s.publish(r.Context(), v.OwnerID, "garage.service_logged", fmt.Sprintf("record:%d", rec.ID), map[string]any{
-		"record_id": rec.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "kind": rec.Kind, "category": rec.Category,
-		"description": rec.Description, "date": rec.Date, "odometer": rec.Odometer, "cost": rec.Cost, "currency": rec.Currency,
-	})
+	rec.InventoryError = s.drainActions(r.Context(), uid)
+
 	writeJSON(w, http.StatusCreated, rec)
 }
 
@@ -201,7 +203,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, msg)
 		return
 	}
-	if err := s.store.UpdateRecord(r.Context(), rec); err != nil {
+	if err := s.store.UpdateRecord(r.Context(), rec, s.partsActions(r.Context(), userFrom(r.Context()), v, rec.Description, partsBefore, rec.Parts)); err != nil {
 		s.fail(w, err, "update record")
 		return
 	}
@@ -215,7 +217,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		s.bookRecord(r.Context(), userFrom(r.Context()), v, rec, in.moneyChoice)
 	}
 	if keys["parts"] {
-		rec.InventoryError = s.takeParts(r.Context(), userFrom(r.Context()), v, rec.Description, partsBefore, rec.Parts)
+		rec.InventoryError = s.drainActions(r.Context(), userFrom(r.Context()).ID)
 	}
 	writeJSON(w, http.StatusOK, rec)
 }
@@ -230,13 +232,13 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "record")
 		return
 	}
-	if err := s.store.DeleteRecord(r.Context(), v.ID, rec.ID); err != nil {
+	if err := s.store.DeleteRecord(r.Context(), v.ID, rec.ID, s.partsActions(r.Context(), userFrom(r.Context()), v, rec.Description+" (deleted)", rec.Parts, nil)); err != nil {
 		s.fail(w, err, "delete record")
 		return
 	}
 	s.store.LogActivity(r.Context(), v.ID, userFrom(r.Context()).ID, "deleted "+rec.Kind, rec.Description)
 	s.unbookMoney(r.Context(), v.ID, rec.MoneyTxID, rec.MoneyUserID)
-	s.takeParts(r.Context(), userFrom(r.Context()), v, rec.Description+" (deleted)", rec.Parts, nil)
+	s.drainActions(r.Context(), userFrom(r.Context()).ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -383,15 +385,17 @@ func (s *Server) handleCreateFuel(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, msg)
 		return
 	}
-	if err := s.store.CreateFuel(r.Context(), f); err != nil {
+	if err := s.store.CreateFuel(r.Context(), f, s.ownerEvent(r.Context(), v.OwnerID, func() (string, string, map[string]any) {
+		return "garage.fuel_logged", fmt.Sprintf("fuel:%d", f.ID), map[string]any{
+			"fuel_id": f.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "date": f.Date, "station": f.Station,
+			"odometer": f.Odometer, "volume": f.Volume, "cost": f.Cost, "currency": f.Currency, "full_tank": f.FullTank,
+		}
+	})); err != nil {
 		s.fail(w, err, "create fuel")
 		return
 	}
 	s.store.LogActivity(r.Context(), v.ID, uid, "added fill-up", f.Station)
-	s.publish(r.Context(), v.OwnerID, "garage.fuel_logged", fmt.Sprintf("fuel:%d", f.ID), map[string]any{
-		"fuel_id": f.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "date": f.Date, "station": f.Station,
-		"odometer": f.Odometer, "volume": f.Volume, "cost": f.Cost, "currency": f.Currency, "full_tank": f.FullTank,
-	})
+
 	msg := s.bookFuel(r.Context(), userFrom(r.Context()), v, f, in.moneyChoice)
 	out := s.fuelWithStats(r.Context(), v.ID, f.ID)
 	out.MoneyError = msg
@@ -513,14 +517,16 @@ func (s *Server) handleCreateOdometer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o := &store.OdometerReading{VehicleID: v.ID, Date: in.Date, Reading: in.Reading, Notes: strings.TrimSpace(in.Notes), Source: "manual"}
-	if err := s.store.CreateOdometer(r.Context(), o); err != nil {
+	if err := s.store.CreateOdometer(r.Context(), o, s.ownerEvent(r.Context(), v.OwnerID, func() (string, string, map[string]any) {
+		return "garage.odometer_updated", fmt.Sprintf("odometer:%d", o.ID), map[string]any{
+			"odometer_id": o.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "date": o.Date, "reading": o.Reading, "source": o.Source,
+		}
+	})); err != nil {
 		s.fail(w, err, "create odometer")
 		return
 	}
 	s.store.LogActivity(r.Context(), v.ID, userFrom(r.Context()).ID, "odometer reading", "")
-	s.publish(r.Context(), v.OwnerID, "garage.odometer_updated", fmt.Sprintf("odometer:%d", o.ID), map[string]any{
-		"odometer_id": o.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "date": o.Date, "reading": o.Reading, "source": o.Source,
-	})
+
 	writeJSON(w, http.StatusCreated, o)
 }
 
@@ -537,13 +543,15 @@ func (s *Server) handleConfirmOdometer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o := &store.OdometerReading{VehicleID: v.ID, Date: store.Today(), Reading: float64(int64(reading + est + 0.5)), Notes: "Confirmed Dawarich estimate", Source: "dawarich"}
-	if err := s.store.CreateOdometer(r.Context(), o); err != nil {
+	if err := s.store.CreateOdometer(r.Context(), o, s.ownerEvent(r.Context(), v.OwnerID, func() (string, string, map[string]any) {
+		return "garage.odometer_updated", fmt.Sprintf("odometer:%d", o.ID), map[string]any{
+			"odometer_id": o.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "date": o.Date, "reading": o.Reading, "source": o.Source,
+		}
+	})); err != nil {
 		s.fail(w, err, "confirm")
 		return
 	}
-	s.publish(r.Context(), v.OwnerID, "garage.odometer_updated", fmt.Sprintf("odometer:%d", o.ID), map[string]any{
-		"odometer_id": o.ID, "vehicle_id": v.ID, "vehicle": v.Title(), "date": o.Date, "reading": o.Reading, "source": o.Source,
-	})
+
 	writeJSON(w, http.StatusCreated, o)
 }
 

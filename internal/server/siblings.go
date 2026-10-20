@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
@@ -191,28 +190,3 @@ func partDeltas(before, after []store.Part) map[int64]float64 {
 // from it: a new record takes them off the shelf, an edit takes or returns
 // the difference, a deleted record puts them back. Returns a message when
 // something could not be moved (the record itself is saved either way).
-func (s *Server) takeParts(ctx context.Context, u *store.User, v *store.Vehicle, what string, before, after []store.Part) string {
-	if u == nil || !s.settingsFor(ctx, u.ID).InventoryTake {
-		return ""
-	}
-	d := partDeltas(before, after)
-	if len(d) == 0 {
-		return ""
-	}
-	conn, err := s.inventoryFor(ctx, u)
-	if err != nil {
-		return "Pocket Inventory not updated: " + err.Error()
-	}
-	note := "Pocket Garage: " + v.Title() + " · " + what
-	var bad []string
-	for id, delta := range d {
-		if _, err := conn.client.Adjust(ctx, id, delta, note); err != nil {
-			bad = append(bad, err.Error())
-		}
-	}
-	if len(bad) > 0 {
-		return "Pocket Inventory not updated: " + strings.Join(bad, "; ")
-	}
-	s.store.LogActivity(ctx, v.ID, u.ID, "Pocket Inventory updated", what)
-	return ""
-}

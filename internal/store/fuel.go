@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"sort"
 )
 
@@ -22,18 +23,23 @@ func scanFuel(row interface{ Scan(...any) error }) (*Fuel, error) {
 }
 
 // CreateFuel inserts a fill-up.
-func (s *Store) CreateFuel(ctx context.Context, f *Fuel) error {
+func (s *Store) CreateFuel(ctx context.Context, f *Fuel, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	if f.Source == "" {
 		f.Source = "manual"
 	}
-	res, err := s.DB.ExecContext(ctx, `INSERT INTO fuel (vehicle_id, date, odometer, volume, cost, currency, cost_home, fx_rate, full_tank, missed, station, grade, soc_start, soc_end, lat, lng, notes, tags, source, external_id, firefly_id, created_by)
+	res, err := tx.ExecContext(ctx, `INSERT INTO fuel (vehicle_id, date, odometer, volume, cost, currency, cost_home, fx_rate, full_tank, missed, station, grade, soc_start, soc_end, lat, lng, notes, tags, source, external_id, firefly_id, created_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		f.VehicleID, f.Date, f.Odometer, f.Volume, f.Cost, f.Currency, f.CostHome, f.FXRate, boolInt(f.FullTank), boolInt(f.Missed), f.Station, f.Grade, f.SocStart, f.SocEnd, nullF(f.Lat), nullF(f.Lng), f.Notes, f.Tags, f.Source, f.ExternalID, f.FireflyID, nullI(f.CreatedBy))
 	if err != nil {
 		return conflict(err)
 	}
 	f.ID, _ = res.LastInsertId()
-	return nil
+	return core.Commit(tx, after...)
 }
 
 // UpdateFuel saves every column.

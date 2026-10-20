@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"strings"
 )
 
@@ -31,25 +32,38 @@ func partsJSON(p []Part) string {
 }
 
 // CreateRecord inserts a record.
-func (s *Store) CreateRecord(ctx context.Context, r *Record) error {
+func (s *Store) CreateRecord(ctx context.Context, r *Record, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	if r.Source == "" {
 		r.Source = "manual"
 	}
-	res, err := s.DB.ExecContext(ctx, `INSERT INTO records (vehicle_id, kind, category, date, odometer, description, notes, vendor, cost, currency, cost_home, fx_rate, parts, tags, source, external_id, firefly_id, created_by)
+	res, err := tx.ExecContext(ctx, `INSERT INTO records (vehicle_id, kind, category, date, odometer, description, notes, vendor, cost, currency, cost_home, fx_rate, parts, tags, source, external_id, firefly_id, created_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.VehicleID, r.Kind, r.Category, r.Date, nullF(r.Odometer), r.Description, r.Notes, r.Vendor, r.Cost, r.Currency, r.CostHome, r.FXRate, partsJSON(r.Parts), r.Tags, r.Source, r.ExternalID, r.FireflyID, nullI(r.CreatedBy))
 	if err != nil {
 		return conflict(err)
 	}
 	r.ID, _ = res.LastInsertId()
-	return nil
+	return core.Commit(tx, after...)
 }
 
 // UpdateRecord saves every column.
-func (s *Store) UpdateRecord(ctx context.Context, r *Record) error {
-	_, err := s.DB.ExecContext(ctx, `UPDATE records SET kind=?, category=?, date=?, odometer=?, description=?, notes=?, vendor=?, cost=?, currency=?, cost_home=?, fx_rate=?, parts=?, tags=?, source=?, external_id=?, firefly_id=?, updated_at=? WHERE id=? AND vehicle_id=?`,
+func (s *Store) UpdateRecord(ctx context.Context, r *Record, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `UPDATE records SET kind=?, category=?, date=?, odometer=?, description=?, notes=?, vendor=?, cost=?, currency=?, cost_home=?, fx_rate=?, parts=?, tags=?, source=?, external_id=?, firefly_id=?, updated_at=? WHERE id=? AND vehicle_id=?`,
 		r.Kind, r.Category, r.Date, nullF(r.Odometer), r.Description, r.Notes, r.Vendor, r.Cost, r.Currency, r.CostHome, r.FXRate, partsJSON(r.Parts), r.Tags, r.Source, r.ExternalID, r.FireflyID, Now(), r.ID, r.VehicleID)
-	return conflict(err)
+	if err != nil {
+		return conflict(err)
+	}
+	return core.Commit(tx, after...)
 }
 
 // SetRecordMoney links (txID > 0) or unlinks a record and its Pocket Money transaction.
@@ -117,17 +131,22 @@ func (s *Store) ListRecords(ctx context.Context, vehicleID int64, f RecordFilter
 }
 
 // DeleteRecord removes a record (documents linked to it stay, unlinked).
-func (s *Store) DeleteRecord(ctx context.Context, vehicleID, id int64) error {
-	res, err := s.DB.ExecContext(ctx, `DELETE FROM records WHERE id = ? AND vehicle_id = ?`, id, vehicleID)
+func (s *Store) DeleteRecord(ctx context.Context, vehicleID, id int64, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `DELETE FROM records WHERE id = ? AND vehicle_id = ?`, id, vehicleID)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
-	_, _ = s.DB.ExecContext(ctx, `UPDATE documents SET link_kind = '', link_id = 0 WHERE vehicle_id = ? AND link_kind = 'record' AND link_id = ?`, vehicleID, id)
-	_, _ = s.DB.ExecContext(ctx, `UPDATE plans SET record_id = NULL WHERE vehicle_id = ? AND record_id = ?`, vehicleID, id)
-	return nil
+	_, _ = tx.ExecContext(ctx, `UPDATE documents SET link_kind = '', link_id = 0 WHERE vehicle_id = ? AND link_kind = 'record' AND link_id = ?`, vehicleID, id)
+	_, _ = tx.ExecContext(ctx, `UPDATE plans SET record_id = NULL WHERE vehicle_id = ? AND record_id = ?`, vehicleID, id)
+	return core.Commit(tx, after...)
 }
 
 // RecordByFirefly finds the record or fuel row already tied to a Firefly journal.
