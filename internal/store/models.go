@@ -361,6 +361,10 @@ type Settings struct {
 	TravelMode    string `json:"travel_mode"`
 	InventoryMode string `json:"inventory_mode"`
 	MoneyMode     string `json:"money_mode"`
+	// How Garage reaches the person's Dawarich: core (URL + their key from
+	// Pocket Core) | direct (dawarich_url + key above) | off; "" = direct when
+	// a key is saved, else core when Garage is connected to Core, else direct.
+	DawarichMode string `json:"dawarich_mode"`
 	// Pocket Money: through a Pocket Core link, or a Money URL + token without Core.
 	MoneyEnabled      bool   `json:"money_enabled"` // offer "Create a transaction" (ticked) when adding costs
 	MoneyURL          string `json:"money_url"`

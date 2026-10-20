@@ -25,13 +25,13 @@ Everything is read from environment variables; every value has a default so a ba
 | `DISTANCE_UNIT` | `km` | `km` or `mi` for new vehicles |
 | `VOLUME_UNIT` | `l` | `l`, `gal_us`, `gal_uk` |
 | `FX_PROVIDER` | `auto` | `auto`, `frankfurter`, `erapi`, `none`. Euro pegs (BAM, BGN, XOF…) are built in. |
-| `DAWARICH_URL` / `DAWARICH_API_KEY` | – | Dawarich |
+| `DAWARICH_URL` / `DAWARICH_API_KEY` | – | Dawarich for the owner (Direct). Without them, and with Pocket Core on the box, each person's Dawarich comes from Core's service connection (Settings → Integrations → Dawarich: Pocket Core / Direct / Off) |
 | `NOTIFY_URL` / `NOTIFY_FORMAT` / `NOTIFY_HOUR` | – / guessed / `8` | Apprise `…/notify/<key>`, ntfy topic URL or JSON webhook; `apprise`, `ntfy`, `json`; hour of the daily reminder check |
 | `TRAVEL_URL` / `TRAVEL_TOKEN` / `TRAVEL_PUBLIC_URL` | – | Pocket Travel (public URL = what the browser opens for trip links) |
 | `INVENTORY_URL` / `INVENTORY_TOKEN` | – | Pocket Inventory |
 | `LUBELOGGER_URL` / `LUBELOGGER_USERNAME` / `LUBELOGGER_PASSWORD` | – | Import everything once on the first start (while the database has no vehicles). `LUBELOGGER_IMPORT_ON_START=false` disables that. |
 | `USER_AGENT` | `PocketGarage/1.0 (…)` | Sent to the exchange-rate providers |
-| `CORE_URL` / `CORE_REGISTRATION_KEY` | – | [Pocket Core](https://git.bjelke.org/abjelosevic88/pocket-homelab-core): register on start (the key is needed once; the minted app token lives in `$DATA_DIR/core.token`), publish `garage.fuel_logged` / `garage.service_logged` / `garage.odometer_updated`, accept the tokens Core hands to paired phones, and reach Pocket Money / Travel / Inventory through Core app links (or a direct URL + token per person) |
+| `CORE_URL` / `CORE_REGISTRATION_KEY` | – | [Pocket Core](https://git.bjelke.org/abjelosevic88/pocket-homelab-core): register on start (the key is needed once; the minted app token lives in `$DATA_DIR/core.token`), publish `garage.fuel_logged` / `garage.service_logged` / `garage.odometer_updated`, accept the tokens Core hands to paired phones, reach Pocket Money / Travel / Inventory through Core app links (or a direct URL + token per person), and Dawarich through a Core service connection (manifest `services: [dawarich]`; Core hands out the address and the person's own key, the box's key only for an admin) |
 | `CORE_APP_URL` | `BASE_URL` | How Core reaches this app for health checks (e.g. `http://host.docker.internal:8175`) |
 | `DEMO_DATA` | `false` | Seed a sample car and motorcycle on an empty database |
 

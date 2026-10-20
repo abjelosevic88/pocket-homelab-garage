@@ -99,13 +99,15 @@ function Integrations() {
   return (
     <div className="grid" style={{ gap: 16 }}>
       <PocketMoneyCard f={f} setF={setF} run={run} status={status} save={save} />
-      <Card title="🛰 Dawarich" actions={badge(f.dawarich_configured)}>
+      <Card title="🛰 Dawarich" actions={connBadge(f.dawarich_mode, f.dawarich_via)}>
         <p className="muted small">Kilometres you actually drove, per day, from the location history. Pocket Garage adds them on top of the last odometer reading, so the estimate (and reminders by distance) stay current between fill-ups. Turn it on per vehicle under the vehicle's Settings tab.</p>
-        <div className="grid" style={{ gap: 12 }}>
-          <Field label="URL"><input value={f.dawarich_url} onChange={e => setF({ ...f, dawarich_url: e.target.value })} placeholder="https://dawarich.example.com" /></Field>
-          <Field label="API key" help="Dawarich → Account → API key."><input value={f.dawarich_api_key} onChange={e => setF({ ...f, dawarich_api_key: e.target.value })} autoComplete="off" /></Field>
-          <div className="row"><button className="btn sm" onClick={() => run('dawarich', f.dawarich_url, f.dawarich_api_key)} disabled={!f.dawarich_url}>Test connection</button>{status('dawarich')}</div>
-        </div>
+        <Connection app="Dawarich" service source={f.dawarich_source} mode={f.dawarich_mode} via={f.dawarich_via} detail={f.dawarich_detail} core={f.core_configured} hasToken={!!f.dawarich_api_key}
+          onMode={m => save({ dawarich_mode: m })} onDisconnect={() => save({ dawarich_url: '', dawarich_api_key: '' })}
+          test={<><button className="btn sm" onClick={() => run('dawarich', f.dawarich_url, f.dawarich_api_key)}>Test connection</button>{status('dawarich')}</>}
+          direct={<div className="two-col tight">
+            <Field label="URL"><input value={f.dawarich_url} onChange={e => setF({ ...f, dawarich_url: e.target.value })} placeholder="https://dawarich.example.com" /></Field>
+            <Field label="API key" help="Dawarich → Account → API key."><input value={f.dawarich_api_key} onChange={e => setF({ ...f, dawarich_api_key: e.target.value })} autoComplete="off" /></Field>
+          </div>} />
       </Card>
       <Card title="🔔 Notifications" actions={badge(f.notify_configured)}>
         <p className="muted small">One push per vehicle when a reminder becomes <i>due soon</i>, <i>due</i> or <i>overdue</i>, plus expiring documents. Apprise gateway (<code>…/notify/&lt;key&gt;</code>), an ntfy topic URL, or any webhook that takes JSON.</p>
@@ -151,31 +153,36 @@ function Integrations() {
 }
 
 /**
- * One Pocket app connection: Pocket Core, Direct (URL + token) or Off, with
- * what it actually is right now. The mode saves at once; Disconnect removes
- * the saved URL and token.
+ * One connection — a Pocket app, or a third-party service (`service`, e.g.
+ * Dawarich) whose address and key come from Pocket Core — as Pocket Core,
+ * Direct (URL + token / API key) or Off, with what it actually is right now.
+ * The mode saves at once; Disconnect removes the saved URL and token.
  */
-function Connection({ app, mode, via, detail, core, onMode, onDisconnect, hasToken, test, direct }: {
+function Connection({ app, mode, via, detail, core, onMode, onDisconnect, hasToken, test, direct, service, source }: {
   app: string; mode: ConnMode; via: string; detail: string; core: boolean; onMode: (m: ConnMode) => void; onDisconnect: () => void
-  hasToken: boolean; test: React.ReactNode; direct: React.ReactNode
+  hasToken: boolean; test: React.ReactNode; direct: React.ReactNode; service?: boolean; source?: string
 }) {
   const ok = via !== ''
+  const secret = service ? 'API key' : 'token'
+  const coreOk = service
+    ? `Connected through Pocket Core (${source === 'box' ? "the box's key" : 'your own key'}). Nothing to fill in; switch it off for yourself in Pocket Core → Settings → Apps acting for me.`
+    : `Connected through Pocket Core, as you. Nothing to fill in; switch it off for yourself in Pocket Core → Settings → Apps acting for me.`
   const line = mode === 'off' ? `Off: Garage does not talk to ${app}.`
-    : mode === 'core' ? (ok ? `Connected through Pocket Core, as you. Nothing to fill in; switch it off for yourself in Pocket Core → Settings → Apps acting for me.` : `Not connected: ${detail}.`)
-    : (ok ? `Direct connection with your own ${app} URL and token; use Test connection to check it.` : `Not connected: ${detail || 'add the URL and a token'}.`)
+    : mode === 'core' ? (ok ? coreOk : `Not connected: ${detail}.`)
+    : (ok ? `Direct connection with your own ${app} URL and ${secret}; use Test connection to check it.` : `Not connected: ${detail || `add the URL and ${service ? 'an API key' : 'a token'}`}.`)
   return (
     <div className="conn-block">
       <div className="conn-mode">
         <Segmented size="sm" value={mode} onChange={m => onMode(m as ConnMode)} options={[
           { value: 'core', label: 'Pocket Core', title: core ? 'Through Pocket Core: per person, nothing to paste' : 'There is no Pocket Core on this box' },
-          { value: 'direct', label: 'Direct', title: 'Your own URL and API token' },
+          { value: 'direct', label: 'Direct', title: service ? 'Your own URL and API key' : 'Your own URL and API token' },
           { value: 'off', label: 'Off' },
         ]} />
       </div>
       <div className={`conn-status ${mode === 'off' ? '' : ok ? 'ok' : 'bad'}`}><span className="dot" />{line}</div>
       {mode === 'direct' && <>
         {direct}
-        <div className="row wrap">{test}{hasToken && <button className="btn sm ghost danger-text" onClick={onDisconnect} title="Remove the saved URL and token">Disconnect</button>}</div>
+        <div className="row wrap">{test}{hasToken && <button className="btn sm ghost danger-text" onClick={onDisconnect} title={`Remove the saved URL and ${secret}`}>Disconnect</button>}</div>
       </>}
       {mode === 'core' && <div className="row wrap">{test}</div>}
     </div>

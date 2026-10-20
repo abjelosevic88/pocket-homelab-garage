@@ -34,7 +34,11 @@ const (
 
 // connMode is the mode in effect: the chosen one, else direct when a token
 // was entered (how it always worked), else Pocket Core.
-func connMode(mode, token string) string {
+func connMode(mode, token string) string { return connModeOr(mode, token, modeCore) }
+
+// connModeOr is connMode with the mode to fall back on when nothing was
+// chosen and no token saved (services fall back on direct without Core).
+func connModeOr(mode, token, fallback string) string {
 	switch mode {
 	case modeCore, modeDirect, modeOff:
 		return mode
@@ -42,7 +46,7 @@ func connMode(mode, token string) string {
 	if token != "" {
 		return modeDirect
 	}
-	return modeCore
+	return fallback
 }
 
 // siblingConn is how Garage reaches one person's Travel or Inventory.
@@ -68,6 +72,8 @@ func linkReason(app, reason string) string {
 		return "you do not have access to " + app + " in Pocket Core"
 	case "unknown_user":
 		return "your email is not a person in Pocket Core"
+	case "no_account":
+		return "you have no " + app + " account of your own yet; ask the admin or let a connector create one"
 	}
 	return ""
 }

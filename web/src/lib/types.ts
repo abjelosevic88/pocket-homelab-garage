@@ -14,6 +14,7 @@ export interface Settings {
   travel_mode: ConnMode; travel_via: '' | 'core' | 'direct'; travel_detail: string
   inventory_mode: ConnMode; inventory_via: '' | 'core' | 'direct'; inventory_detail: string
   money_mode: ConnMode; money_via: '' | 'core' | 'direct'; money_detail: string
+  dawarich_mode: ConnMode; dawarich_via: '' | 'core' | 'direct'; dawarich_detail: string; dawarich_source: '' | 'personal' | 'box'
   money_enabled: boolean; money_url: string; money_token: string; money_account: number; money_category_fuel: number; money_category: number
   max_upload_bytes: number; setup_complete: boolean; base_url: string
 }

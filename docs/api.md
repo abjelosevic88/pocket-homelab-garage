@@ -10,7 +10,7 @@ Base path `/api/v1`. JSON in and out. Authenticate with the session cookie (brow
 | GET/PUT | `/auth/me` | profile, password change |
 | GET/POST/DELETE | `/tokens`, `/tokens/{id}` | personal access tokens |
 | GET/POST/PUT/DELETE | `/users`, `/users/{id}` | admin |
-| GET/PUT | `/settings` · GET `/settings/system` | the caller's own preferences and integrations over the box-wide title / exchange-rate switch (only an admin changes those); secrets masked, a masked value means "keep". `/settings/system` shows paths and row counts to admins only; `/backup` is admin-only |
+| GET/PUT | `/settings` · GET `/settings/system` | the caller's own preferences and integrations over the box-wide title / exchange-rate switch (only an admin changes those); secrets masked, a masked value means "keep". Each connection reports `<name>_mode` (`core`/`direct`/`off`, saved by PUTting it), `<name>_via` (`core`/`direct`, empty when not connected) and `<name>_detail` (why not) for `money`, `travel`, `inventory` and `dawarich`; `dawarich_source` is `personal` or `box` (whose key Pocket Core hands out). `/settings/system` shows paths and row counts to admins only; `/backup` is admin-only |
 | GET | `/meta` · `/currencies` · `/fx?from=&to=&date=` | lists the UI uses |
 | GET | `/backup` | consistent SQLite copy |
 

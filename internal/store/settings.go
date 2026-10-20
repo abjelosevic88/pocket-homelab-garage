@@ -18,7 +18,7 @@ var PersonalKeys = []string{"home_currency", "date_format", "time_format", "dist
 	"firefly_url", "firefly_token", "firefly_category", "firefly_account", "firefly_auto_sync",
 	"dawarich_url", "dawarich_api_key", "notify_url", "notify_format", "notify_hour", "notify_digest",
 	"travel_url", "travel_token", "travel_public_url", "inventory_url", "inventory_token",
-	"inventory_take", "travel_mode", "inventory_mode", "money_mode", "money_enabled", "money_url", "money_token", "money_account", "money_category_fuel", "money_category", "money_vehicle_accounts"}
+	"inventory_take", "travel_mode", "inventory_mode", "money_mode", "dawarich_mode", "money_enabled", "money_url", "money_token", "money_account", "money_category_fuel", "money_category", "money_vehicle_accounts"}
 
 // DefaultSettings returns the built-in defaults.
 func DefaultSettings() Settings {
@@ -106,6 +106,8 @@ func applySetting(st *Settings, k, v string, global bool) {
 		st.InventoryMode = v
 	case "money_mode":
 		st.MoneyMode = v
+	case "dawarich_mode":
+		st.DawarichMode = v
 	case "inventory_take":
 		st.InventoryTake = v != "0"
 	case "money_enabled":
@@ -196,6 +198,7 @@ func settingsKV(st Settings) map[string]string {
 		"travel_mode":            st.TravelMode,
 		"inventory_mode":         st.InventoryMode,
 		"money_mode":             st.MoneyMode,
+		"dawarich_mode":          st.DawarichMode,
 		"money_enabled":          b[st.MoneyEnabled],
 		"money_url":              st.MoneyURL,
 		"money_token":            st.MoneyToken,

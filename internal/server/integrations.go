@@ -46,14 +46,16 @@ func (s *Server) publicSettings(ctx context.Context, u *store.User, st store.Set
 	travelMode, travelVia, travelDetail := s.connStatus(ctx, u, "travel", "Pocket Travel", st.TravelMode, st.TravelToken, travelScopes)
 	invMode, inventoryVia, invDetail := s.connStatus(ctx, u, "inventory", "Pocket Inventory", st.InventoryMode, st.InventoryToken, inventoryScopes)
 	moneyMode, moneyVia, moneyDetail := s.connStatus(ctx, u, "money", "Pocket Money", st.MoneyMode, st.MoneyToken, moneyScopes)
+	dwMode, dwVia, dwDetail, dwSource := s.serviceStatus(ctx, u, "dawarich", "Dawarich", st.DawarichMode, st.DawarichURL, st.DawarichAPIKey, true)
 	return map[string]any{
 		"core_configured": s.core.Configured(),
 		"travel_mode":     travelMode, "travel_via": travelVia, "travel_detail": travelDetail,
 		"inventory_mode": invMode, "inventory_via": inventoryVia, "inventory_detail": invDetail, "inventory_take": st.InventoryTake,
 		"money_mode": moneyMode, "money_via": moneyVia, "money_detail": moneyDetail,
+		"dawarich_mode": dwMode, "dawarich_via": dwVia, "dawarich_detail": dwDetail, "dawarich_source": dwSource,
 		"title": st.Title, "home_currency": st.HomeCurrency, "date_format": st.DateFormat, "time_format": st.TimeFormat,
 		"distance_unit": st.DistanceUnit, "volume_unit": st.VolumeUnit, "economy_unit": st.EconomyUnit, "fx_auto": st.FXAuto, "fx_provider": s.cfg.FXProvider,
-		"dawarich_url": st.DawarichURL, "dawarich_api_key": mask(st.DawarichAPIKey), "dawarich_configured": st.DawarichURL != "" && st.DawarichAPIKey != "",
+		"dawarich_url": st.DawarichURL, "dawarich_api_key": mask(st.DawarichAPIKey), "dawarich_configured": dwVia != "",
 		"notify_url": st.NotifyURL, "notify_format": st.NotifyFormat, "notify_hour": st.NotifyHour, "notify_digest": st.NotifyDigest, "notify_configured": st.NotifyURL != "",
 		"travel_url": st.TravelURL, "travel_public_url": st.TravelPublicURL, "travel_token": mask(st.TravelToken), "travel_configured": travelVia != "",
 		"inventory_url": st.InventoryURL, "inventory_token": mask(st.InventoryToken), "inventory_configured": inventoryVia != "",
@@ -145,9 +147,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	secret("travel_token", &cur.TravelToken, in.TravelToken)
 	url("inventory_url", &cur.InventoryURL, in.InventoryURL)
 	secret("inventory_token", &cur.InventoryToken, in.InventoryToken)
-	for k, dst := range map[string]*string{"travel_mode": &cur.TravelMode, "inventory_mode": &cur.InventoryMode, "money_mode": &cur.MoneyMode} {
+	for k, dst := range map[string]*string{"travel_mode": &cur.TravelMode, "inventory_mode": &cur.InventoryMode, "money_mode": &cur.MoneyMode, "dawarich_mode": &cur.DawarichMode} {
 		if keys[k] {
-			v := map[string]string{"travel_mode": in.TravelMode, "inventory_mode": in.InventoryMode, "money_mode": in.MoneyMode}[k]
+			v := map[string]string{"travel_mode": in.TravelMode, "inventory_mode": in.InventoryMode, "money_mode": in.MoneyMode, "dawarich_mode": in.DawarichMode}[k]
 			if v == modeCore || v == modeDirect || v == modeOff {
 				*dst = v
 			}
@@ -218,8 +220,20 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch in.Which {
 	case "dawarich":
-		c := dawarich.New(urlOr(st.DawarichURL), keyOr(st.DawarichAPIKey), 15*time.Second)
-		err = c.Health(ctx)
+		// a key typed into the form is tried as is; otherwise the saved mode decides
+		var c *dawarich.Client
+		how := "direct connection"
+		if typed := in.Key != "" && !strings.Contains(in.Key, "••"); typed || s.serviceMode(st.DawarichMode, st.DawarichAPIKey) == modeDirect {
+			c = dawarich.New(urlOr(st.DawarichURL), keyOr(st.DawarichAPIKey), 15*time.Second)
+		} else {
+			var conn *serviceConn
+			if c, conn, err = s.dawarichFor(ctx, userFrom(r.Context()).ID); err == nil {
+				how = viaText(conn)
+			}
+		}
+		if err == nil {
+			err = c.Health(ctx)
+		}
 		if err == nil {
 			var days []dawarich.Day
 			days, err = c.Timeline(ctx, time.Now().AddDate(0, 0, -7), time.Now())
@@ -227,7 +241,7 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 			for _, d := range days {
 				km += d.Summary.ModeDistances["driving"]
 			}
-			msg = fmt.Sprintf("Dawarich reachable, %.0f km driven in the last 7 days", km)
+			msg = fmt.Sprintf("Dawarich reachable, %.0f km driven in the last 7 days, %s", km, how)
 		}
 	case "notify":
 		f := in.Format
@@ -546,22 +560,32 @@ func (s *Server) autoSync(ctx context.Context) {
 	}
 	for _, u := range users {
 		st := s.settingsFor(ctx, u.ID)
-		if st.DawarichURL == "" || st.DawarichAPIKey == "" {
+		if s.serviceMode(st.DawarichMode, st.DawarichAPIKey) == modeOff {
 			continue
 		}
 		vs, err := s.store.ListVehicles(ctx, store.VehicleFilter{OwnerID: u.ID})
 		if err != nil {
 			continue
 		}
+		var todo []*store.Vehicle
 		for i := range vs {
-			v := &vs[i]
-			if v.Status == "archived" {
-				continue
+			if vs[i].Status != "archived" && vs[i].Dawarich {
+				todo = append(todo, &vs[i])
 			}
-			if v.Dawarich {
-				if _, err := s.syncDawarich(ctx, v); err != nil {
-					s.log.Warn("dawarich sync", "vehicle", v.Title(), "err", err)
-				}
+		}
+		if len(todo) == 0 {
+			continue
+		}
+		// one answer from Core per person and pass; someone without a
+		// Dawarich of their own is simply skipped
+		dw, _, err := s.dawarichFor(ctx, u.ID)
+		if err != nil {
+			s.log.Debug("dawarich sync skipped", "user", u.ID, "err", err)
+			continue
+		}
+		for _, v := range todo {
+			if _, err := s.syncDawarichWith(ctx, dw, v); err != nil {
+				s.log.Warn("dawarich sync", "vehicle", v.Title(), "err", err)
 			}
 		}
 	}
@@ -572,10 +596,15 @@ func (s *Server) autoSync(ctx context.Context) {
 // syncDawarich stores the driving km per day since the last stored day
 // (re-reading the last 3 days, since Dawarich keeps receiving points).
 func (s *Server) syncDawarich(ctx context.Context, v *store.Vehicle) (int, error) {
-	cl := s.clientsFor(ctx, v.OwnerID) // the owner's Dawarich, whoever pressed sync
-	if !cl.dawarich.Configured() {
-		return 0, fmt.Errorf("dawarich is not configured")
+	dw, _, err := s.dawarichFor(ctx, v.OwnerID) // the owner's Dawarich, whoever pressed sync
+	if err != nil {
+		return 0, err
 	}
+	return s.syncDawarichWith(ctx, dw, v)
+}
+
+// syncDawarichWith is syncDawarich with the owner's Dawarich already in hand.
+func (s *Server) syncDawarichWith(ctx context.Context, dw *dawarich.Client, v *store.Vehicle) (int, error) {
 	last := s.store.LastDawarichDay(ctx, v.ID)
 	from := time.Now().AddDate(0, 0, -90)
 	if last != "" {
@@ -597,7 +626,7 @@ func (s *Server) syncDawarich(ctx context.Context, v *store.Vehicle) (int, error
 		if end.After(to) {
 			end = to
 		}
-		days, err := cl.dawarich.Timeline(ctx, cur, end)
+		days, err := dw.Timeline(ctx, cur, end)
 		if err != nil {
 			return n, err
 		}

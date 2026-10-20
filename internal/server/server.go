@@ -24,7 +24,6 @@ import (
 
 	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/config"
-	"github.com/abjelosevic88/pocket-homelab-garage/internal/dawarich"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/fx"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/lubelogger"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/notify"
@@ -277,7 +276,6 @@ func (s *Server) maybeNotify(ctx context.Context) {
 
 type clients struct {
 	st        store.Settings
-	dawarich  *dawarich.Client
 	notify    *notify.Client
 	travel    *pocket.Client
 	inventory *pocket.Client
@@ -293,7 +291,6 @@ func (s *Server) clientsFor(ctx context.Context, userID int64) clients {
 		st.InventoryURL = s.resolveSibling(ctx, "inventory")
 	}
 	return clients{st: st,
-		dawarich:  dawarich.New(st.DawarichURL, st.DawarichAPIKey, 60*time.Second),
 		notify:    notify.New(st.NotifyURL, st.NotifyFormat),
 		travel:    pocket.New(st.TravelURL, st.TravelToken, 15*time.Second),
 		inventory: pocket.New(st.InventoryURL, st.InventoryToken, 15*time.Second),
@@ -608,7 +605,8 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 			{App: "travel", Scopes: travelScopes, Reason: "Show the fuel, costs and kilometres of each trip on the vehicle"},
 			{App: "inventory", Scopes: inventoryScopes, Reason: "Offer parts and fluids from your shelf on a service record and take the ones you fitted off it"},
 		},
-		Offers: linkOffers,
+		Services: serviceUses,
+		Offers:   linkOffers,
 	}
 	if s.cfg.BaseURL != "" {
 		// ask Core for a relying-party client so "Sign in with Pocket Core" needs no configuration
