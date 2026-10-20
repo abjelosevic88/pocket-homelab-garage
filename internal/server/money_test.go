@@ -105,7 +105,7 @@ func TestPocketMoneyThroughCore(t *testing.T) {
 		}
 	}))
 	t.Cleanup(coreSrv.Close)
-	p := newTwoPeople(t, func(s *Server) { s.core = core.New(coreSrv.URL, core.Options{Token: "pca_garage"}) })
+	p := newTwoPeople(t, func(s *Server) { s.core = core.New(coreSrv.URL, core.Options{DB: s.store.DB, Token: "pca_garage"}) })
 
 	var status map[string]any
 	_, body := p.do(p.aTok, "GET", "/api/v1/money", nil)

@@ -547,6 +547,9 @@ func TestAutoCreatedAccountsAreMembers(t *testing.T) {
 	}
 	defer st.Close()
 	s := New(cfg, st, log, nil)
+	if err := s.core.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	ts := httptest.NewServer(s.Router())
 	defer ts.Close()
 	me := func(email string) string {

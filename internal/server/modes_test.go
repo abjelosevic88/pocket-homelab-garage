@@ -80,7 +80,7 @@ func (m *modesCore) count() int {
 
 func TestConnectionModesReportedToCore(t *testing.T) {
 	c := newModesCore(t)
-	p := newTwoPeople(t, func(s *Server) { s.core = core.New(c.srv.URL, core.Options{Token: "pca_garage"}) })
+	p := newTwoPeople(t, func(s *Server) { s.core = core.New(c.srv.URL, core.Options{DB: s.store.DB, Token: "pca_garage"}) })
 
 	// Right after registering: everyone, every target, the mode in effect
 	// (the owner's Dawarich key from the environment means Direct; nothing

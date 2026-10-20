@@ -151,7 +151,7 @@ func overviewDawarich(t *testing.T, p *twoPeople, tok, car string) bool {
 
 func TestDawarichServiceModes(t *testing.T) {
 	g := newServiceRig(t)
-	p := newTwoPeople(t, func(s *Server) { s.core = core.New(g.core.URL, core.Options{Token: "pca_garage"}) })
+	p := newTwoPeople(t, func(s *Server) { s.core = core.New(g.core.URL, core.Options{DB: s.store.DB, Token: "pca_garage"}) })
 
 	// The manifest lists Dawarich under Services.
 	if err := p.s.registerWithCore(context.Background()); err != nil {

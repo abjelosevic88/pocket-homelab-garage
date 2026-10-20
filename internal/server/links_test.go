@@ -40,7 +40,7 @@ func linkCore(t *testing.T) (*httptest.Server, func() core.Manifest) {
 			scope := map[string]string{"day": "vehicles:read", "other": "notes:read"}[parts[1]]
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"active": true, "kind": "delegated", "scope": scope, "audience": "garage",
-				"user": map[string]any{"id": 9, "email": email, "name": parts[0], "role": "member"},
+				"user": map[string]any{"id": 9, "sub": email, "email": email, "name": parts[0], "role": "member"},
 				"app":  map[string]any{"id": 4, "slug": "day", "name": "Pocket Day"},
 			})
 		default:
@@ -55,7 +55,7 @@ func linkCore(t *testing.T) (*httptest.Server, func() core.Manifest) {
 // link token: exactly what that person sees, nothing else in Garage.
 func TestCoreLinkVehiclesRead(t *testing.T) {
 	coreSrv, manifest := linkCore(t)
-	p := newTwoPeople(t, func(s *Server) { s.core = core.New(coreSrv.URL, core.Options{Token: "pca_garage"}) })
+	p := newTwoPeople(t, func(s *Server) { s.core = core.New(coreSrv.URL, core.Options{DB: s.store.DB, Token: "pca_garage"}) })
 	g := p.seedOwner()
 	ov := fmt.Sprintf("/api/v1/vehicles/%d", g.vehicle)
 
@@ -150,7 +150,7 @@ func TestCoreLinkVehiclesRead(t *testing.T) {
 	if err := p.s.registerWithCore(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if m := manifest(); len(m.Offers) != 1 || m.Offers[0].Scope != "vehicles:read" {
+	if m := manifest(); len(m.Offers) != 2 || m.Offers[0].Scope != "vehicles:read" {
 		t.Errorf("manifest offers: %+v", m.Offers)
 	}
 }
@@ -159,7 +159,7 @@ func TestCoreLinkVehiclesRead(t *testing.T) {
 // settings routes, nor members' cars.
 func TestCoreLinkAdminRefused(t *testing.T) {
 	coreSrv, _ := linkCore(t)
-	p := newTwoPeople(t, func(s *Server) { s.core = core.New(coreSrv.URL, core.Options{Token: "pca_garage"}) })
+	p := newTwoPeople(t, func(s *Server) { s.core = core.New(coreSrv.URL, core.Options{DB: s.store.DB, Token: "pca_garage"}) })
 	code, body := p.do(p.bTok, "POST", "/api/v1/vehicles", map[string]any{"make": "Fiat", "model": "Panda"})
 	if code != http.StatusCreated {
 		t.Fatalf("member vehicle: %d %s", code, body)
