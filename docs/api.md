@@ -96,6 +96,15 @@ Homepage `services.yaml`:
         - { field: next_reminder, label: Next }
 ```
 
+## Pocket Core app links
+
+Another Pocket app the person allowed in Pocket Core (Pocket Day, for the journal) calls this API for them with a five-minute `pcx_` token (see `docs/links.md` in pocket-homelab-core). The token acts as that person: it sees the vehicles they own or are a member of, exactly as with their own login, and opens only these routes; every other `/api/v1` route answers `403`, and the LubeLogger-compatible `/api/*` and the calendar feed never accept it.
+
+| Scope | Routes |
+|---|---|
+| any linked app | GET `/auth/me` |
+| `vehicles:read` | GET `/vehicles` (`?bare=1` skips the summaries), `/vehicles/{id}`, `/vehicles/{id}/fuel`, `/vehicles/{id}/records` (`?from=&to=`) |
+
 ## LubeLogger-compatible API
 
 Mounted at `/api/…` (no `/v1`). Auth: **Basic** with a Pocket Garage email + password, or a bearer token. Bodies may be form-encoded or JSON; numbers are read with either decimal separator; dates come back as ISO. Send `culture-invariant: true` to receive JSON numbers instead of strings (the Pocket Homelab app does).

@@ -608,6 +608,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 			{App: "travel", Scopes: travelScopes, Reason: "Show the fuel, costs and kilometres of each trip on the vehicle"},
 			{App: "inventory", Scopes: inventoryScopes, Reason: "Offer parts and fluids from your shelf on a service record and take the ones you fitted off it"},
 		},
+		Offers: linkOffers,
 	}
 	if s.cfg.BaseURL != "" {
 		// ask Core for a relying-party client so "Sign in with Pocket Core" needs no configuration
