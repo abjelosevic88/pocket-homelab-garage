@@ -17,7 +17,7 @@ import (
 // Like the Pocket app connections, chosen per person in Settings:
 //
 //   - core:   Pocket Core hands out the service's address and the person's
-//     own key there (the box's key only when Garage acts for an admin),
+//     own key there (never the box's key),
 //     asked for when needed (the SDK reuses it for a minute); nothing to paste.
 //   - direct: the URL + key saved in Settings, the way it always worked.
 //   - off:    Garage does not call the service.
