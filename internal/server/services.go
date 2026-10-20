@@ -85,7 +85,7 @@ func (s *Server) serviceFor(ctx context.Context, u *store.User, typ, name, mode,
 	if u == nil {
 		return nil, errors.New("nobody to act for")
 	}
-	cred, err := s.core.ServiceFor(ctx, u.Email, typ)
+	cred, err := s.serviceCred(ctx, u.Email, typ)
 	if err != nil {
 		var le *core.LinkError
 		if errors.As(err, &le) {
@@ -141,6 +141,22 @@ func (s *Server) serviceStatus(ctx context.Context, u *store.User, typ, name, mo
 		return eff, "", t, ""
 	}
 	return eff, "", reason, ""
+}
+
+// freshKey marks a context whose service credential must come from Core
+// right now (Test connection), not the SDK's one-minute cache.
+type freshKey struct{}
+
+// freshCreds makes serviceFor ask Core afresh.
+func freshCreds(ctx context.Context) context.Context { return context.WithValue(ctx, freshKey{}, true) }
+
+// serviceCred is the person's credential: cached by the SDK for a minute (and
+// through a Core outage) for normal work, straight from Core for a test.
+func (s *Server) serviceCred(ctx context.Context, email, typ string) (*core.ServiceCred, error) {
+	if fresh, _ := ctx.Value(freshKey{}).(bool); fresh {
+		return s.core.ServiceForFresh(ctx, email, typ)
+	}
+	return s.core.ServiceFor(ctx, email, typ)
 }
 
 // dawarichFor is userID's Dawarich, the way they chose.

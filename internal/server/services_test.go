@@ -179,7 +179,9 @@ func TestDawarichServiceModes(t *testing.T) {
 		t.Fatalf("direct: dawarich saw %v, core handed out %v", keys, creds)
 	}
 
-	// Pocket Core: Core's address and key, asked for at every use.
+	// Pocket Core: Core's address and key, reused for a minute (the SDK's
+	// cache), so the settings screens and two syncs ask Core once.
+	g.reset()
 	if code, body := p.do(p.aTok, "PUT", "/api/v1/settings", map[string]any{"dawarich_mode": "core"}); code != 200 {
 		t.Fatalf("mode %d %s", code, body)
 	}
@@ -187,15 +189,14 @@ func TestDawarichServiceModes(t *testing.T) {
 	if st["dawarich_mode"] != "core" || st["dawarich_via"] != "core" || st["dawarich_source"] != "box" {
 		t.Fatalf("owner core %v", st)
 	}
-	g.reset()
 	for i := 0; i < 2; i++ {
 		if code, body := p.do(p.aTok, "POST", car+"/dawarich/sync", nil); code != 200 || !strings.Contains(body, `"estimate_km":42`) {
 			t.Fatalf("core sync %d %s", code, body)
 		}
 	}
 	keys, creds = g.seen()
-	if len(creds) != 2 || creds[0] != "owner@example.com" {
-		t.Fatalf("want a credential per sync, got %v", creds)
+	if len(creds) != 1 || creds[0] != "owner@example.com" {
+		t.Fatalf("want one credential for the settings and both syncs (cached), got %v", creds)
 	}
 	for _, k := range keys {
 		if k != "box-dawarich-key" {
@@ -207,6 +208,9 @@ func TestDawarichServiceModes(t *testing.T) {
 	}
 	if _, body := p.do(p.aTok, "POST", "/api/v1/integrations/test", map[string]any{"which": "dawarich"}); !strings.Contains(body, `"ok":true`) || !strings.Contains(body, "through Pocket Core (the box's key)") {
 		t.Fatalf("test %s", body)
+	}
+	if _, creds = g.seen(); len(creds) != 2 {
+		t.Fatalf("Test connection must ask Core afresh, Core handed out %v", creds)
 	}
 
 	// Off: no calls at all.
@@ -247,12 +251,12 @@ func TestDawarichServiceModes(t *testing.T) {
 	g.mu.Lock()
 	g.memberOwn = true
 	g.mu.Unlock()
+	g.reset()
 	st = settingsOf(t, p, p.bTok)
 	if st["dawarich_via"] != "core" || st["dawarich_source"] != "personal" {
 		t.Fatalf("member personal %v", st)
 	}
-	g.reset()
-	p.s.autoSync(context.Background()) // the owner is off, the member syncs with their own key
+	p.s.autoSync(context.Background()) // the owner is off, the member syncs with their own key (cached from the settings screen)
 	keys, creds = g.seen()
 	if len(keys) == 0 || len(creds) != 1 || creds[0] != "member@example.com" {
 		t.Fatalf("member auto sync: dawarich %v, core %v", keys, creds)

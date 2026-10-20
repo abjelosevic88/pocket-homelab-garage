@@ -183,6 +183,12 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.CacheDelete(r.Context(), fmt.Sprintf("travel:trips:%d", u.ID))
+	for _, k := range []string{"travel_mode", "inventory_mode", "money_mode", "dawarich_mode", "travel_token", "inventory_token", "money_token", "dawarich_api_key"} {
+		if keys[k] {
+			s.modesChanged() // a mode changed or a connection was removed: tell Core's map
+			break
+		}
+	}
 	writeJSON(w, http.StatusOK, s.publicSettings(r.Context(), u, s.settingsFor(r.Context(), u.ID)))
 }
 
@@ -227,7 +233,7 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 			c = dawarich.New(urlOr(st.DawarichURL), keyOr(st.DawarichAPIKey), 15*time.Second)
 		} else {
 			var conn *serviceConn
-			if c, conn, err = s.dawarichFor(ctx, userFrom(r.Context()).ID); err == nil {
+			if c, conn, err = s.dawarichFor(freshCreds(ctx), userFrom(r.Context()).ID); err == nil { // a test is always live
 				how = viaText(conn)
 			}
 		}

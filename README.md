@@ -96,6 +96,8 @@ All optional, all under **Settings → Integrations** (or environment variables,
 - **Notifications** — an Apprise gateway endpoint, an ntfy topic URL or any JSON webhook; pick the hour.
 - **Pocket Travel / Pocket Inventory** — URL + an API token from each app.
 
+Each connection is a **Pocket Core | Off** switch when Garage is connected to Pocket Core; a direct URL + key is under *Advanced: connect directly with a URL and key* (shown as a third option while it is in use, and the only way without Core). Garage tells Core how each person connects, so Core's Links page shows Direct connections too.
+
 ## Documentation
 
 - [Configuration](docs/configuration.md) — every environment variable, auth modes, CLI
