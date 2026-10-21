@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, V1 } from '../lib/api'
 import type { MoneyStatus } from '../lib/types'
 import { Select } from './Select'
+import { Icon } from './icons'
 
 /** Pocket Money status for the signed-in person; ?vehicle picks that vehicle's last account. */
 export function useMoneyStatus(vehicleId?: number, refresh = '') {
@@ -34,7 +35,7 @@ export function MoneyBook({ status, value, onChange, hasCost, initial = true }: 
 
 /** What an already booked entry shows instead of the option. */
 export function MoneyLinked({ status }: { status: MoneyStatus | null }) {
-  return <div className="money-book muted small">💶 Booked in Pocket Money{status?.url && <> (<a href={status.url} target="_blank" rel="noreferrer">open</a>)</>}. Changes to the date, cost, description or vendor are carried over; deleting this deletes the transaction too.</div>
+  return <div className="money-book muted small"><Icon name="wallet" size={15} />Booked in Pocket Money{status?.url && <> (<a href={status.url} target="_blank" rel="noreferrer">open</a>)</>}. Changes to the date, cost, description or vendor are carried over; deleting this deletes the transaction too.</div>
 }
 
 /** The body fields for a save; nothing when the option is not shown. */

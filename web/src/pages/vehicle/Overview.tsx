@@ -2,12 +2,13 @@ import { Link } from 'react-router-dom'
 import { useApp } from '../../lib/app-context'
 import { fmtDate, fmtDateTime, plural } from '../../lib/format'
 import { fmtEcon, fmtNum, fmtOdo, fmtPricePer, fmtVol } from '../../lib/units'
-import { KIND_ICON, KIND_LABEL } from '../../lib/types'
+import { KIND_LABEL } from '../../lib/types'
 import { Card, Empty } from '../../components/ui'
 import { Money } from '../../components/Money'
 import { CostBars, Spark } from '../../components/Charts'
 import { ReminderRow } from '../Reminders'
 import { useVehicle } from './ctx'
+import { Icon, LOG_KIND_ICON } from '../../components/icons'
 
 export default function OverviewTab() {
   const { vehicle: v, overview: ov, reload } = useVehicle()
@@ -30,7 +31,7 @@ export default function OverviewTab() {
       <div className="overview-grid mb">
         <Card title="Needs attention" actions={<Link className="btn ghost sm" to={`/vehicles/${v.id}/reminders`}>All {plural(s.reminders, 'reminder')}</Link>}>
           {attention.length === 0 ? <p className="muted">Nothing due{s.next_reminder ? <>. Next: <b>{s.next_reminder.title}</b>{s.next_reminder.days_left != null && ` in ${s.next_reminder.days_left} days`}{s.next_reminder.km_left != null && ` / ${Math.round(s.next_reminder.km_left).toLocaleString()} ${v.odometer_unit}`}</> : s.reminders === 0 ? <>. <Link to={`/vehicles/${v.id}/reminders`}>Add reminders</Link> for oil, registration, tyres…</> : '.'}</p> : attention.slice(0, 5).map(r => <ReminderRow key={r.id} r={r} vehicle={v} onChanged={reload} />)}
-          {ov.expiring_documents.length > 0 && <div className="mt-sm small">{ov.expiring_documents.map(d => <div key={d.id}>📄 <b>{d.name}</b> {d.expires_on < new Date().toISOString().slice(0, 10) ? <span className="bad">expired {fmtDate(d.expires_on)}</span> : <>expires {fmtDate(d.expires_on)}</>}</div>)}</div>}
+          {ov.expiring_documents.length > 0 && <div className="mt-sm small">{ov.expiring_documents.map(d => <div key={d.id} className="row" style={{ gap: 6 }}><Icon name="file" size={14} className="muted" /><b>{d.name}</b> {d.expires_on < new Date().toISOString().slice(0, 10) ? <span className="bad">expired {fmtDate(d.expires_on)}</span> : <>expires {fmtDate(d.expires_on)}</>}</div>)}</div>}
         </Card>
         <Card title="Costs, last 12 months" actions={<Link className="btn ghost sm" to={`/vehicles/${v.id}/reports`}>Reports</Link>}>
           <CostBars data={ov.months} currency={v.currency} decimals={dec} height={150} />
@@ -39,11 +40,11 @@ export default function OverviewTab() {
 
       <div className="overview-grid mb">
         <Card title="Recent fill-ups" actions={<Link className="btn ghost sm" to={`/vehicles/${v.id}/fuel`}>All {plural(s.fills, 'fill-up')}</Link>}>
-          {ov.recent_fuel.length === 0 ? <Empty title="No fill-ups yet" /> : <div className="inline-list">{ov.recent_fuel.slice(0, 6).map(f => <div key={f.id} className="li"><span>⛽</span><span className="grow"><b>{fmtVol(f.volume, u)}</b>{f.station && <span className="muted"> · {f.station}</span>}<span className="muted small"> · {fmtOdo(f.odometer, v.odometer_unit)}</span></span><span className="muted small">{f.economy > 0 ? fmtEcon(f.economy, u, v.odometer_unit) : f.distance > 0 ? `${Math.round(f.distance)} ${v.odometer_unit}` : ''}</span><span className="muted small">{fmtDate(f.date, false)}</span><Money minor={f.cost} code={f.currency} /></div>)}</div>}
+          {ov.recent_fuel.length === 0 ? <Empty title="No fill-ups yet" /> : <div className="inline-list">{ov.recent_fuel.slice(0, 6).map(f => <div key={f.id} className="li"><Icon name="fuel" size={15} /><span className="grow"><b>{fmtVol(f.volume, u)}</b>{f.station && <span className="muted"> · {f.station}</span>}<span className="muted small"> · {fmtOdo(f.odometer, v.odometer_unit)}</span></span><span className="muted small">{f.economy > 0 ? fmtEcon(f.economy, u, v.odometer_unit) : f.distance > 0 ? `${Math.round(f.distance)} ${v.odometer_unit}` : ''}</span><span className="muted small">{fmtDate(f.date, false)}</span><Money minor={f.cost} code={f.currency} /></div>)}</div>}
           {s.last_fuel && s.last_fuel.volume > 0 && <p className="muted small mt-sm">Last price {fmtPricePer(s.last_fuel.price_per, s.last_fuel.currency, dec, u)}</p>}
         </Card>
         <Card title="Recent work & expenses" actions={<Link className="btn ghost sm" to={`/vehicles/${v.id}/service`}>All {plural(s.records, 'record')}</Link>}>
-          {ov.recent_records.length === 0 ? <Empty title="Nothing logged yet" /> : <div className="inline-list">{ov.recent_records.slice(0, 6).map(r => <div key={r.id} className="li"><span title={KIND_LABEL[r.kind]}>{KIND_ICON[r.kind]}</span><span className="grow"><b>{r.description}</b>{r.vendor && <span className="muted"> · {r.vendor}</span>}</span><span className="muted small">{fmtDate(r.date, false)}</span>{r.cost > 0 && <Money minor={r.cost} code={r.currency} />}</div>)}</div>}
+          {ov.recent_records.length === 0 ? <Empty title="Nothing logged yet" /> : <div className="inline-list">{ov.recent_records.slice(0, 6).map(r => <div key={r.id} className="li"><Icon name={LOG_KIND_ICON[r.kind] || 'wrench'} size={15} title={KIND_LABEL[r.kind]} /><span className="grow"><b>{r.description}</b>{r.vendor && <span className="muted"> · {r.vendor}</span>}</span><span className="muted small">{fmtDate(r.date, false)}</span>{r.cost > 0 && <Money minor={r.cost} code={r.currency} />}</div>)}</div>}
           {s.last_service && <p className="muted small mt-sm">Last service {fmtDate(s.last_service.date)}{s.last_service.odometer ? ` at ${fmtOdo(s.last_service.odometer, v.odometer_unit)}` : ''}{s.last_service.odometer ? ` · ${fmtNum(s.odometer_estimate - s.last_service.odometer)} ${v.odometer_unit} ago` : ''}</p>}
         </Card>
       </div>

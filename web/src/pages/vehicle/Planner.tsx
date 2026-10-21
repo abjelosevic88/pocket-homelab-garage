@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { api, V1 } from '../../lib/api'
 import { useApp } from '../../lib/app-context'
 import type { Plan } from '../../lib/types'
-import { KIND_ICON, STAGE_LABEL } from '../../lib/types'
+import { STAGE_LABEL } from '../../lib/types'
 import { fmtDate } from '../../lib/format'
 import { Confirm, Loading, useAsync, useToast } from '../../components/ui'
 import { Money } from '../../components/Money'
 import { PlanDoneModal, PlanModal } from '../../components/forms'
 import { useVehicle } from './ctx'
+import { Icon, LOG_KIND_ICON } from '../../components/icons'
 
 export default function Planner() {
   const { vehicle: v, reload: reloadOv, canEdit } = useVehicle()
@@ -41,9 +42,9 @@ export default function Planner() {
               <h4><span>{STAGE_LABEL[st]}</span><span>{col.length}</span></h4>
               {col.map(p => (
                 <div key={p.id} className={`kcard ${drag === p.id ? 'drag' : ''}`} draggable={canEdit} onDragStart={() => setDrag(p.id)} onDragEnd={() => setDrag(null)} onClick={() => canEdit && setEdit(p)}>
-                  <div className="row" style={{ gap: 6, alignItems: 'flex-start' }}><span className={`prio ${p.priority}`} title={p.priority} style={{ marginTop: 6 }} /><b style={{ flex: 1 }}>{p.title}</b><span title={p.kind}>{KIND_ICON[p.kind]}</span></div>
+                  <div className="row" style={{ gap: 6, alignItems: 'flex-start' }}><span className={`prio ${p.priority}`} title={p.priority} style={{ marginTop: 6 }} /><b style={{ flex: 1 }}>{p.title}</b><Icon name={LOG_KIND_ICON[p.kind] || 'wrench'} size={14} className="muted" title={p.kind} /></div>
                   <div className="meta">{p.category && <span className="badge">{p.category}</span>}{p.estimate > 0 && <Money minor={p.estimate} code={v.currency} />}{p.target_date && <span>by {fmtDate(p.target_date, false)}</span>}</div>
-                  {canEdit && st !== 'done' && <div className="row mt-sm" style={{ gap: 4 }} onClick={e => e.stopPropagation()}><button className="btn sm primary" onClick={() => setFinish(p)}>Log & finish</button>{st !== 'in_progress' && <button className="btn sm ghost" onClick={() => move(p.id, 'in_progress')}>Start</button>}<button className="btn sm ghost danger-text" onClick={() => setDel(p)}>✕</button></div>}
+                  {canEdit && st !== 'done' && <div className="row mt-sm" style={{ gap: 4 }} onClick={e => e.stopPropagation()}><button className="btn sm primary" onClick={() => setFinish(p)}>Log & finish</button>{st !== 'in_progress' && <button className="btn sm ghost" onClick={() => move(p.id, 'in_progress')}>Start</button>}<button className="btn sm ghost icon-only danger-text" onClick={() => setDel(p)} aria-label="Delete" title="Delete"><Icon name="trash" size={14} /></button></div>}
                 </div>
               ))}
               {canEdit && <button className="btn ghost sm" style={{ width: '100%' }} onClick={() => setCreate(st)}>+ add</button>}

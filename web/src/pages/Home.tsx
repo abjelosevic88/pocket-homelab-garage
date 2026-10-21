@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { HomeData, Vehicle } from '../lib/types'
-import { KIND_ICON, KIND_LABEL } from '../lib/types'
+import { KIND_LABEL } from '../lib/types'
 import { fmtDate } from '../lib/format'
 import { fmtEcon, fmtOdo } from '../lib/units'
 import { Card, Empty, Loading, PageHeader, useAsync } from '../components/ui'
@@ -11,14 +11,17 @@ import { Money } from '../components/Money'
 import { VehicleCard } from './Vehicles'
 import { ReminderRow } from './Reminders'
 import { FuelModal, RecordModal, VehicleModal } from '../components/forms'
+import { Icon, LOG_KIND_ICON } from '../components/icons'
+import { useOnChange } from '../components/Layout'
 
 export default function Home() {
   const { user, settings, reloadVehicles } = useApp()
   const navigate = useNavigate()
   const { data, error, loading, reload } = useAsync(() => api.get<HomeData>(`${V1}/home`), [])
   const [modal, setModal] = useState<'fuel' | 'record' | 'vehicle' | null>(null)
+  useOnChange(() => { reload() })
   if (loading && !data) return <Loading />
-  if (error) return <div className="callout danger">{error}</div>
+  if (error) return <div className="callout danger"><Icon name="alert" size={15} /><span>{error}</span></div>
   if (!data) return null
   const { stats, vehicles, reminders, recent } = data
   const hour = new Date().getHours()
@@ -31,13 +34,13 @@ export default function Home() {
   return (
     <>
       <PageHeader title={`${greet}, ${first}`} sub={stats.due > 0 ? `${stats.due} reminder${stats.due === 1 ? '' : 's'} need attention.` : stats.soon > 0 ? `${stats.soon} coming up soon.` : vehicles.length ? 'All quiet in the garage.' : 'Add your first vehicle.'}
-        actions={<>{main && <button className="btn" onClick={() => setModal('fuel')}>⛽ Fill-up</button>}{main && <button className="btn" onClick={() => setModal('record')}>🔧 Work</button>}<button className="btn primary" onClick={() => setModal('vehicle')}>+ Vehicle</button></>} />
+        actions={<>{main && <button className="btn primary" onClick={() => setModal('fuel')}><Icon name="fuel" size={15} />Fill-up</button>}{main && <button className="btn" onClick={() => setModal('record')}><Icon name="wrench" size={15} />Log work</button>}<button className="btn" onClick={() => setModal('vehicle')}><Icon name="plus" size={15} />Vehicle</button></>} />
 
       {main && s ? (
         <div className={`hero garage ${main.has_image ? 'has-cover' : ''}`} style={heroStyle} onClick={() => navigate(`/vehicles/${main.id}`)}>
           <div className="hero-body">
             <div>
-              <div className="row" style={{ gap: 8, marginBottom: 6 }}>{main.plate && <span className="status-pill">{main.plate}</span>}{s.reminders_due > 0 && <span className="status-pill">🔴 {s.reminders_due} due</span>}{s.estimate_km > 0 && <span className="status-pill" title="Dawarich kilometres since your last confirmed reading">≈ +{Math.round(s.estimate_km)} {main.odometer_unit} recorded</span>}</div>
+              <div className="row" style={{ gap: 8, marginBottom: 6 }}>{main.plate && <span className="status-pill">{main.plate}</span>}{s.reminders_due > 0 && <span className="status-pill"><Icon name="alert" size={12} strokeWidth={2.2} />{s.reminders_due} due</span>}{s.estimate_km > 0 && <span className="status-pill" title="Dawarich kilometres since your last confirmed reading">≈ +{Math.round(s.estimate_km)} {main.odometer_unit} recorded</span>}</div>
               <h1>{main.display_name}</h1>
               <div className="odo-big">{fmtOdo(s.odometer_estimate, main.odometer_unit, false)}<small>{main.odometer_unit}{s.estimate_km > 0 ? ' est.' : ''}</small></div>
               <div className="meta-line"><span>{s.economy ? fmtEcon(s.economy_recent || s.economy, u, main.odometer_unit) : 'no economy yet'}</span><span><Money minor={s.cost_year} code={main.currency} compact /> this year</span>{s.last_fuel && <span>last fill {fmtDate(s.last_fuel.date, false)}</span>}</div>
@@ -50,7 +53,7 @@ export default function Home() {
           </div>
         </div>
       ) : (
-        <Card className="mb"><Empty title="No vehicles yet">Add one, or bring everything over from LubeLogger under Settings → Import.</Empty></Card>
+        <Card className="mb"><Empty icon="car" title="No vehicles yet">Add one, or bring everything over from LubeLogger under Settings → Import.</Empty></Card>
       )}
 
       <div className="stats">
@@ -70,7 +73,7 @@ export default function Home() {
         <Card title="Latest entries">
           {recent.length === 0 ? <p className="muted">Fill-ups and work you log show up here.</p> : (
             <div className="inline-list">{recent.map(e => <Link key={`${e.kind}-${e.id}`} className="li" to={`/vehicles/${e.vehicle_id}/${e.kind === 'fuel' ? 'fuel' : 'service'}`} style={{ color: 'inherit' }}>
-              <span title={KIND_LABEL[e.kind]}>{KIND_ICON[e.kind]}</span><span className="grow"><b>{e.title}</b>{vehicles.length > 1 && <span className="muted small"> · {e.vehicle_name}</span>}</span><span className="muted small">{fmtDate(e.date, false)}</span>{e.cost > 0 && <Money minor={e.cost} code={e.currency} />}
+              <Icon name={LOG_KIND_ICON[e.kind] || 'wrench'} size={15} title={KIND_LABEL[e.kind]} /><span className="grow"><b>{e.title}</b>{vehicles.length > 1 && <span className="muted small"> · {e.vehicle_name}</span>}</span><span className="muted small">{fmtDate(e.date, false)}</span>{e.cost > 0 && <Money minor={e.cost} code={e.currency} />}
             </Link>)}</div>
           )}
         </Card>

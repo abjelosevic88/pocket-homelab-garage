@@ -8,6 +8,7 @@ import { Field, Modal, Segmented, useToast } from './ui'
 import { Select } from './Select'
 import { AmountInput, CurrencySelect, MoneyInput } from './Money'
 import { MoneyBook, MoneyLinked, moneyBody, moneyWarning, useMoneyStatus, type MoneyChoice } from './MoneyBook'
+import { Icon } from './icons'
 
 const cap = (s: string) => s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, ' ') : ''
 
@@ -186,12 +187,12 @@ export function RecordModal({ vehicle, record, kind = 'service', onClose, onSave
             {f.parts.map((p, i) => (
               <div key={i} className="part">
                 <span className="part-name"><input value={p.name} onChange={e => { const hit = inv?.items.find(it => it.name === e.target.value); setPart(i, { name: e.target.value, inventory_id: hit?.id }); setInvQ(e.target.value) }} placeholder="Oil filter" list={settings?.inventory_configured ? `inv-${i}` : undefined} />
-                  {p.inventory_id ? <span className="part-inv" title={settings?.inventory_take ? 'From Pocket Inventory: taken off the shelf when you save' : 'From Pocket Inventory'}>📦</span> : null}</span>
+                  {p.inventory_id ? <span className="part-inv" title={settings?.inventory_take ? 'From Pocket Inventory: taken off the shelf when you save' : 'From Pocket Inventory'}><Icon name="package" size={14} /></span> : null}</span>
                 {settings?.inventory_configured && <datalist id={`inv-${i}`}>{(inv?.items || []).map(it => <option key={it.id} value={it.name}>{`${it.quantity} ${it.unit || ''} on hand`}</option>)}</datalist>}
                 <input type="number" step="0.01" value={p.qty || ''} onChange={e => setPart(i, { qty: Number(e.target.value) })} placeholder="qty" />
                 <input className="partno" value={p.part_no} onChange={e => setPart(i, { part_no: e.target.value })} placeholder="part no." />
                 <MoneyInput value={p.cost} code={f.currency} onChange={m => setPart(i, { cost: m || 0 })} placeholder="cost" />
-                <button type="button" className="btn ghost sm" onClick={() => set('parts', f.parts.filter((_, j) => j !== i))} aria-label="Remove">✕</button>
+                <button type="button" className="btn ghost sm" onClick={() => set('parts', f.parts.filter((_, j) => j !== i))} aria-label="Remove"><Icon name="x" size={14} /></button>
               </div>
             ))}
             <div><button type="button" className="btn sm" onClick={() => set('parts', [...f.parts, { name: '', qty: 1, cost: 0, part_no: '' }])}>+ Add part</button>{partsTotal > 0 && <span className="muted small" style={{ marginLeft: 10 }}>parts {(partsTotal / Math.pow(10, dec)).toFixed(dec)} {f.currency}</span>}</div>

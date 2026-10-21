@@ -8,7 +8,7 @@ import { fromVol, VOL_LABEL } from '../lib/units'
 import { Field, Loading, useToast } from '../components/ui'
 import { Select } from '../components/Select'
 import { AmountInput } from '../components/Money'
-import { Logo } from '../components/Layout'
+import { Icon } from '../components/icons'
 import { OdometerModal, RecordModal } from '../components/forms'
 import { MoneyBook, moneyBody, moneyWarning, useMoneyStatus, type MoneyChoice } from '../components/MoneyBook'
 
@@ -49,13 +49,15 @@ export default function Quick() {
   }
   return (
     <div className="quick">
-      <div className="row mb" style={{ justifyContent: 'space-between' }}>
-        <Link to="/" className="row" style={{ gap: 8, color: 'inherit' }}><span className="logo" style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--accent)', color: '#fff', display: 'grid', placeItems: 'center' }}><Logo /></span><b>Quick log</b></Link>
-        <span className="row"><button className="btn ghost sm" onClick={toggleTheme}>{theme === 'dark' ? '☀' : '☾'}</button><Link className="btn ghost sm" to="/">Open app</Link></span>
+      <div className="quick-head">
+        <Link to="/" className="row" style={{ gap: 10, color: 'inherit', textDecoration: 'none' }}><img src="/favicon.svg" alt="" /><h1 style={{ fontSize: 18 }}>Quick log</h1></Link>
+        <span className="spacer" />
+        <button className="btn ghost icon-only" onClick={toggleTheme} aria-label="Toggle theme" title="Toggle theme"><Icon name={theme === 'dark' ? 'sun' : 'moon'} size={17} /></button>
+        <Link className="btn sm" to="/">Open app</Link>
       </div>
       {active.length > 1 && <div className="mb"><Select value={String(vid)} onChange={v => { params.set('vehicle', v); setParams(params, { replace: true }) }} options={active.map(v => ({ value: String(v.id), label: v.display_name, hint: v.plate }))} /></div>}
       <div className="quick-kinds">
-        {([['fuel', '⛽', 'Fuel'], ['service', '🔧', 'Work'], ['expense', '🧾', 'Expense'], ['odometer', '🧭', 'Odometer']] as [Kind, string, string][]).map(([k, i, l]) => <button key={k} type="button" className={kind === k ? 'active' : ''} onClick={() => setKind(k)}><span className="ico">{i}</span><span>{l}</span></button>)}
+        {([['fuel', 'fuel', 'Fuel'], ['service', 'wrench', 'Work'], ['expense', 'receipt', 'Expense'], ['odometer', 'gauge', 'Odometer']] as [Kind, string, string][]).map(([k, i, l]) => <button key={k} type="button" className={kind === k ? 'active' : ''} onClick={() => setKind(k)}><Icon name={i} size={20} /><span>{l}</span></button>)}
       </div>
       {!vehicle ? <Loading /> : kind === 'fuel' ? (
         <form onSubmit={submitFuel} className="grid" style={{ gap: 14 }}>

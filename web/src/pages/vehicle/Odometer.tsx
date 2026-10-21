@@ -7,6 +7,7 @@ import { Card, Confirm, Empty, Loading, useAsync, useToast } from '../../compone
 import { Line } from '../../components/Charts'
 import { OdometerModal } from '../../components/forms'
 import { useVehicle } from './ctx'
+import { Icon } from '../../components/icons'
 
 interface Hist { history: OdometerReading[]; latest: number; latest_date: string; estimate_km: number; estimate: number }
 
@@ -43,7 +44,7 @@ export default function OdometerTab() {
                 <td>{fmtDate(o.date)}</td><td className="num">{fmtOdo(o.reading, v.odometer_unit, false)}</td>
                 <td className="num muted small">{o.delta ? `${o.delta > 0 ? '+' : ''}${fmtNum(o.delta)}${o.days ? ` / ${o.days} d` : ''}` : ''}</td>
                 <td className="muted small">{src[o.source] || o.source}{o.notes && <> · {o.notes}</>}</td>
-                <td className="right">{canEdit && (o.source === 'manual' || o.source === 'api' || o.source === 'dawarich' || o.source === 'lubelogger') && <><button className="btn ghost sm" onClick={() => setEdit(o)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(o)}>✕</button></>}</td>
+                <td className="right">{canEdit && (o.source === 'manual' || o.source === 'api' || o.source === 'dawarich' || o.source === 'lubelogger') && <><button className="btn ghost sm" onClick={() => setEdit(o)}>Edit</button><button className="btn ghost sm icon-only danger-text" onClick={() => setDel(o)} aria-label="Delete" title="Delete"><Icon name="trash" size={14} /></button></>}</td>
               </tr>)}</tbody>
             </table>
           )}

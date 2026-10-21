@@ -6,6 +6,7 @@ import { fmtBytes, fmtDate } from '../../lib/format'
 import { Confirm, Empty, Field, Loading, Modal, useAsync, useToast } from '../../components/ui'
 import { Select } from '../../components/Select'
 import { useVehicle } from './ctx'
+import { Icon } from '../../components/icons'
 
 const cap = (s: string) => s ? s[0].toUpperCase() + s.slice(1) : ''
 
@@ -38,7 +39,7 @@ export default function Documents() {
             <div className="row" style={{ justifyContent: 'space-between' }}><span className="ext">{ext(d)}</span><span className="badge">{cap(d.kind)}</span></div>
             <a href={`${V1}/vehicles/${v.id}/documents/${d.id}/file`} target="_blank" rel="noreferrer"><b>{d.name}</b></a>
             <div className="muted small">{fmtBytes(d.bytes)} · {fmtDate(d.created_at, false)}{d.expires_on && <> · {d.expires_on < today ? <span className="bad">expired {fmtDate(d.expires_on)}</span> : <>valid until {fmtDate(d.expires_on)}</>}</>}</div>
-            {canEdit && <div className="row" style={{ gap: 2 }}><a className="btn ghost sm" href={`${V1}/vehicles/${v.id}/documents/${d.id}/file?download=1`}>Download</a><button className="btn ghost sm" onClick={() => setEdit(d)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(d)}>✕</button></div>}
+            {canEdit && <div className="row" style={{ gap: 2 }}><a className="btn ghost sm" href={`${V1}/vehicles/${v.id}/documents/${d.id}/file?download=1`}>Download</a><button className="btn ghost sm" onClick={() => setEdit(d)}>Edit</button><button className="btn ghost sm icon-only danger-text" onClick={() => setDel(d)} aria-label="Delete" title="Delete"><Icon name="trash" size={14} /></button></div>}
           </div>
         ))}</div>
       )}

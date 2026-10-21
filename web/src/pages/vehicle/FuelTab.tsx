@@ -10,6 +10,7 @@ import { Line } from '../../components/Charts'
 import { FuelModal } from '../../components/forms'
 import { useVehicle } from './ctx'
 import { useMoneyStatus } from '../../components/MoneyBook'
+import { Icon } from '../../components/icons'
 
 export default function FuelTab() {
   const { vehicle: v, reload: reloadOv, canEdit, overview } = useVehicle()
@@ -42,7 +43,7 @@ export default function FuelTab() {
         <Card title={`Price per ${ev ? 'kWh' : 'litre'}`}><Line points={prices} fmt={y => fmtPricePer(y, v.currency, dec, u)} height={150} /></Card>
       </div>
       <Card title="Fill-ups" actions={<>
-        <div className="search" style={{ position: 'relative' }}><span className="ico">⌕</span><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search station, notes…" style={{ paddingLeft: 30, width: 200 }} /></div>
+        <div className="search" style={{ position: 'relative' }}><Icon name="search" size={15} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search station, notes…" style={{ paddingLeft: 30, width: 200 }} /></div>
         <a className="btn sm" href={`${V1}/vehicles/${v.id}/export/fuel.csv`}>CSV</a>
         {canEdit && <button className="btn primary sm" onClick={() => setEdit('new')}>+ Fill-up</button>}
       </>} flush>
@@ -59,7 +60,7 @@ export default function FuelTab() {
                 <td className="num muted small">{f.volume > 0 ? fmtPricePer(f.price_per, f.currency, currencies.find(c => c.code === f.currency)?.decimals ?? 2, u) : ''}</td>
                 <td className="num">{f.economy > 0 ? fmtEcon(f.economy, u, v.odometer_unit) : <span className="muted">—</span>}</td>
                 <td className="muted">{f.station}{f.grade && <span className="small"> · {f.grade}</span>}{cleanNotes(f.notes) && <div className="small">{cleanNotes(f.notes)}</div>}{f.money_tx_id && <span className="tag-src" title="Booked in Pocket Money"> · money</span>}{f.source !== 'manual' && <span className="tag-src"> · {f.source}</span>}</td>
-                <td className="right" style={{ whiteSpace: 'nowrap' }}>{canEdit && <>{ms?.connected && !f.money_tx_id && f.cost > 0 && <button className="btn ghost sm" onClick={() => book(f)} title="Create the transaction in Pocket Money">→ Money</button>}<button className="btn ghost sm" onClick={() => setEdit(f)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(f)}>✕</button></>}</td>
+                <td className="right" style={{ whiteSpace: 'nowrap' }}>{canEdit && <>{ms?.connected && !f.money_tx_id && f.cost > 0 && <button className="btn ghost sm" onClick={() => book(f)} title="Create the transaction in Pocket Money"><Icon name="wallet" size={14} />Money</button>}<button className="btn ghost sm" onClick={() => setEdit(f)}>Edit</button><button className="btn ghost sm icon-only danger-text" onClick={() => setDel(f)} aria-label="Delete" title="Delete"><Icon name="trash" size={14} /></button></>}</td>
               </tr>
             ))}</tbody>
           </table>

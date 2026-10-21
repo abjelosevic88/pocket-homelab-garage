@@ -5,6 +5,7 @@ import { ago } from '../../lib/format'
 import { Confirm, Empty, Loading, useAsync } from '../../components/ui'
 import { NoteModal } from '../../components/forms'
 import { useVehicle } from './ctx'
+import { Icon } from '../../components/icons'
 
 export default function Notes() {
   const { vehicle: v, reload: reloadOv, canEdit } = useVehicle()
@@ -19,7 +20,7 @@ export default function Notes() {
       {!data || data.length === 0 ? <Empty title="No notes yet" /> : (
         <div className="notes-grid">{data.map(n => (
           <div key={n.id} className={`note-card ${n.pinned ? 'pinned' : ''}`}>
-            <div className="row" style={{ justifyContent: 'space-between' }}><b>{n.title || <span className="muted">Untitled</span>}</b>{canEdit && <span className="row" style={{ gap: 2 }}><button className="btn ghost sm" onClick={() => pin(n)} title={n.pinned ? 'Unpin' : 'Pin'}>{n.pinned ? '📌' : '📍'}</button><button className="btn ghost sm" onClick={() => setEdit(n)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(n)}>✕</button></span>}</div>
+            <div className="row" style={{ justifyContent: 'space-between' }}><b>{n.title || <span className="muted">Untitled</span>}</b>{canEdit && <span className="row" style={{ gap: 2 }}><button className="btn ghost sm" onClick={() => pin(n)} title={n.pinned ? 'Unpin' : 'Pin'} aria-label={n.pinned ? 'Unpin' : 'Pin'}><Icon name="pin" size={14} className={n.pinned ? 'ok-text' : ''} /></button><button className="btn ghost sm" onClick={() => setEdit(n)}>Edit</button><button className="btn ghost sm icon-only danger-text" onClick={() => setDel(n)} aria-label="Delete" title="Delete"><Icon name="trash" size={14} /></button></span>}</div>
             <pre>{n.body}</pre>
             <div className="muted small mt-sm">{ago(n.updated_at)}</div>
           </div>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api, V1 } from '../../lib/api'
 import { useApp } from '../../lib/app-context'
 import type { Rec } from '../../lib/types'
-import { KIND_ICON, KIND_LABEL } from '../../lib/types'
+import { KIND_LABEL } from '../../lib/types'
 import { fmtDate } from '../../lib/format'
 import { cleanNotes, fmtOdo } from '../../lib/units'
 import { Card, Confirm, Empty, Loading, Segmented, useAsync, useToast } from '../../components/ui'
@@ -11,6 +11,7 @@ import { RecordModal } from '../../components/forms'
 import { Select } from '../../components/Select'
 import { useVehicle } from './ctx'
 import { useMoneyStatus } from '../../components/MoneyBook'
+import { Icon, LOG_KIND_ICON } from '../../components/icons'
 
 export default function ServiceTab() {
   const { vehicle: v, reload: reloadOv, canEdit, overview } = useVehicle()
@@ -33,7 +34,7 @@ export default function ServiceTab() {
     <>
       <div className="toolbar">
         <Segmented value={kind} onChange={setKind} options={[{ value: '', label: 'All' }, ...(meta?.record_kinds || []).map(k => ({ value: k, label: KIND_LABEL[k] }))]} size="sm" />
-        <div className="search"><span className="ico">⌕</span><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search description, vendor, parts…" /></div>
+        <div className="search"><Icon name="search" size={15} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search description, vendor, parts…" /></div>
         <Select ariaLabel="Year" value={year} onChange={setYear} options={years.map(y => ({ value: String(y), label: String(y) }))} placeholder="All years" clearLabel="All years" />
         <a className="btn sm" href={`${V1}/vehicles/${v.id}/export/records.csv?kind=${kind}`}>CSV</a>
         {canEdit && <button className="btn primary sm" onClick={() => setEdit('new')}>+ Log work</button>}
@@ -45,11 +46,11 @@ export default function ServiceTab() {
             <tbody>{list.map(r => (<>
               <tr key={r.id} onClick={() => setOpen(open === r.id ? null : r.id)} style={{ cursor: 'pointer' }}>
                 <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
-                <td><span className="badge cat">{KIND_ICON[r.kind]} {KIND_LABEL[r.kind]}</span>{r.category && <span className="badge" style={{ marginLeft: 4 }}>{r.category}</span>}</td>
+                <td><span className="badge cat"><Icon name={LOG_KIND_ICON[r.kind] || 'wrench'} size={12} strokeWidth={2} />{KIND_LABEL[r.kind]}</span>{r.category && <span className="badge" style={{ marginLeft: 4 }}>{r.category}</span>}</td>
                 <td><b>{r.description}</b>{r.vendor && <span className="muted small"> · {r.vendor}</span>}{(r.parts?.length || 0) > 0 && <span className="muted small"> · {r.parts.length} part{r.parts.length === 1 ? '' : 's'}</span>}{r.money_tx_id && <span className="tag-src" title="Booked in Pocket Money"> · money</span>}{r.source !== 'manual' && r.source !== 'firefly' && <span className="tag-src"> · {r.source}</span>}</td>
                 <td className="num muted">{r.odometer ? fmtOdo(r.odometer, v.odometer_unit, false) : ''}</td>
                 <td className="num">{r.cost > 0 ? <><Money minor={r.cost} code={r.currency} />{r.currency !== v.currency && <div className="muted small"><Money minor={r.cost_home} code={v.currency} /></div>}</> : <span className="muted">—</span>}</td>
-                <td className="right" style={{ whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>{canEdit && <>{ms?.connected && !r.money_tx_id && r.cost > 0 && <button className="btn ghost sm" onClick={() => book(r)} title="Create the transaction in Pocket Money">→ Money</button>}<button className="btn ghost sm" onClick={() => setEdit(r)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(r)}>✕</button></>}</td>
+                <td className="right" style={{ whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>{canEdit && <>{ms?.connected && !r.money_tx_id && r.cost > 0 && <button className="btn ghost sm" onClick={() => book(r)} title="Create the transaction in Pocket Money"><Icon name="wallet" size={14} />Money</button>}<button className="btn ghost sm" onClick={() => setEdit(r)}>Edit</button><button className="btn ghost sm icon-only danger-text" onClick={() => setDel(r)} aria-label="Delete" title="Delete"><Icon name="trash" size={14} /></button></>}</td>
               </tr>
               {open === r.id && (cleanNotes(r.notes) || (r.parts?.length || 0) > 0 || r.tags) && <tr key={`${r.id}-d`}><td colSpan={6} style={{ background: 'var(--surface-2)' }}>
                 {cleanNotes(r.notes) && <div className="small" style={{ whiteSpace: 'pre-wrap' }}>{cleanNotes(r.notes)}</div>}

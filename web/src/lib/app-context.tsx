@@ -3,6 +3,8 @@ import { api, V1 } from './api'
 import { setDateFormats, type DateFormat, type TimeFormat } from './format'
 import type { Currency, Meta, Settings, User, Vehicle } from './types'
 
+export type ThemeMode = 'system' | 'light' | 'dark'
+
 interface AuthStatus { needs_setup: boolean; auth_mode: string; authenticated: boolean; user: User | null; version: string; title: string; oidc?: boolean; oidc_name?: string }
 interface AppState {
   status: AuthStatus | null
@@ -12,7 +14,9 @@ interface AppState {
   currencies: Currency[]
   meta: Meta | null
   vehicles: Vehicle[]
+  themeMode: ThemeMode
   theme: 'light' | 'dark'
+  setThemeMode: (m: ThemeMode) => void
   toggleTheme: () => void
   refresh: () => Promise<void>
   reloadMeta: () => Promise<void>
@@ -33,8 +37,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currencies, setCurrencies] = useState<Currency[]>([])
   const [meta, setMeta] = useState<Meta | null>(null)
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('pg-theme') as 'light' | 'dark') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'))
-  useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('pg-theme', theme) }, [theme])
+  const [themeMode, setThemeModeRaw] = useState<ThemeMode>(() => (localStorage.getItem('pg-theme') as ThemeMode) || 'system')
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const h = () => setSystemDark(mq.matches)
+    mq.addEventListener('change', h)
+    return () => mq.removeEventListener('change', h)
+  }, [])
+  const theme: 'light' | 'dark' = themeMode === 'system' ? (systemDark ? 'dark' : 'light') : themeMode
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', theme === 'dark' ? '#111113' : '#ffffff'))
+  }, [theme])
+  const setThemeMode = useCallback((m: ThemeMode) => { setThemeModeRaw(m); if (m === 'system') localStorage.removeItem('pg-theme'); else localStorage.setItem('pg-theme', m) }, [])
   useEffect(() => { if (settings?.title) document.title = settings.title }, [settings?.title])
   const setSettings = useCallback((s: Settings) => { setSettingsRaw(s); setDateFormats(s.date_format as DateFormat, s.time_format as TimeFormat) }, [])
   const reloadVehicles = useCallback(async () => { setVehicles(await api.get<Vehicle[]>(`${V1}/vehicles?bare=1`)) }, [])
@@ -58,5 +74,5 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('pg:unauthorized', h)
     return () => window.removeEventListener('pg:unauthorized', h)
   }, [])
-  return <Ctx.Provider value={{ status, user, settings, users, currencies, meta, vehicles, theme, toggleTheme: () => setTheme(t => t === 'dark' ? 'light' : 'dark'), refresh, reloadMeta, reloadVehicles, setUser, setSettings }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ status, user, settings, users, currencies, meta, vehicles, themeMode, theme, setThemeMode, toggleTheme: () => setThemeMode(theme === 'dark' ? 'light' : 'dark'), refresh, reloadMeta, reloadVehicles, setUser, setSettings }}>{children}</Ctx.Provider>
 }
