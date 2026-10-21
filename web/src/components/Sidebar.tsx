@@ -40,6 +40,7 @@ export function Sidebar({ onLog, onNavigate, target }: { onLog: (k: LogKind, v?:
       <div className="sb-brand">
         <img src="/favicon.svg" alt="" className="sb-logo" />
         <span className="sb-title">{title !== 'Pocket Garage' ? title : <>Pocket <b>Garage</b></>}</span>
+        {status?.version && <span className="sb-version" title={`Version ${status.version}`}>{/^\d/.test(status.version) ? 'v' + status.version : status.version}</span>}
       </div>
       <button type="button" className="btn primary create-btn" aria-haspopup="menu" aria-expanded={!!menu} onClick={e => setMenu(menu ? null : rectOf(e.currentTarget))}>
         <Icon name="plus" size={17} strokeWidth={2.2} />Log<Icon name="chevron-down" size={15} className="create-caret" />
@@ -60,7 +61,6 @@ export function Sidebar({ onLog, onNavigate, target }: { onLog: (k: LogKind, v?:
       <div className="sb-foot">
         <Link to="/settings" className="sb-foot-link" onClick={onNavigate}><Icon name="settings" size={15} />Settings</Link>
         <button type="button" className="sb-foot-link" onClick={() => { onNavigate(); window.dispatchEvent(new CustomEvent('pg:shortcuts')) }}><Icon name="keyboard" size={15} />Shortcuts</button>
-        {status?.version && <a className="sb-foot-link sb-ver" href="https://github.com/abjelosevic88/pocket-homelab-garage/releases" target="_blank" rel="noreferrer" title="Release notes">v{status.version.replace(/^v/, '')}</a>}
       </div>
     </aside>
   )
