@@ -228,6 +228,8 @@ a.stat:hover { border-color: var(--border-strong); box-shadow: var(--shadow); te
 
 /* Settings → Integrations: how Garage reaches a Pocket app */
 .conn-block { display: grid; gap: 12px; }
+.loc-dawarich { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.loc-dawarich-h { font-size: 12.5px; font-weight: 650; color: var(--muted); margin-bottom: 10px; }
 .conn-mode { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .conn-advanced { background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; color: var(--muted); text-decoration: underline; cursor: pointer; }
 .conn-advanced:hover { color: var(--text); }

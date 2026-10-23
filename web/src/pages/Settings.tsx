@@ -192,9 +192,7 @@ function Integrations() {
   return (
     <div className="stack loose">
       <PocketMoneyCard f={f} setF={setF} run={run} status={status} save={save} />
-      <LocationCard f={f} save={save} run={run} status={status} />
-      <Section title="Dawarich" icon="route" actions={connBadge(f.dawarich_mode, f.dawarich_via)}
-        sub={<>The alternative location history{f.location_effective === 'dawarich' ? ', in use now' : ''}: Dawarich's driving kilometres per day, used when you pick Dawarich above or while Pocket Movement is not reachable.</>}>
+      <LocationCard f={f} save={save} run={run} status={status} dawarich={<>
         <Connection app="Dawarich" service source={f.dawarich_source} mode={f.dawarich_mode} via={f.dawarich_via} detail={f.dawarich_detail} core={f.core_connected} hasToken={!!f.dawarich_api_key}
           onMode={m => save({ dawarich_mode: m })} onDisconnect={() => save({ dawarich_url: '', dawarich_api_key: '' })}
           test={<><button className="btn sm" onClick={() => run('dawarich', f.dawarich_url, f.dawarich_api_key)}>Test connection</button>{status('dawarich')}</>}
@@ -202,7 +200,7 @@ function Integrations() {
             <Field label="URL"><input value={f.dawarich_url} onChange={e => setF({ ...f, dawarich_url: e.target.value })} placeholder="https://dawarich.example.com" /></Field>
             <Field label="API key" help="Dawarich → Account → API key."><input value={f.dawarich_api_key} onChange={e => setF({ ...f, dawarich_api_key: e.target.value })} autoComplete="off" /></Field>
           </div>} />
-      </Section>
+      </>} />
       <Section title="Pocket Travel" icon="plane" actions={connBadge(f.travel_mode, f.travel_via)} sub="Fill-ups and costs that fall inside a trip show up on the vehicle overview per trip, with the kilometres driven.">
         <Connection app="Pocket Travel" mode={f.travel_mode} via={f.travel_via} detail={f.travel_detail} core={f.core_connected} hasToken={!!f.travel_token}
           onMode={m => save({ travel_mode: m })} onDisconnect={() => save({ travel_url: '', travel_token: '', travel_public_url: '' })}
@@ -288,7 +286,7 @@ function CoreHint({ what }: { what?: string }) {
  * Core only; its driving journeys) or Dawarich. Nothing picked = Pocket
  * Movement whenever it is reachable, Dawarich meanwhile.
  */
-function LocationCard({ f, save, run, status }: { f: SettingsT; save: (patch?: Partial<SettingsT>) => Promise<void>; run: (which: string, url: string, key: string) => void; status: (which: string) => React.ReactNode }) {
+function LocationCard({ f, save, run, status, dawarich }: { f: SettingsT; save: (patch?: Partial<SettingsT>) => Promise<void>; run: (which: string, url: string, key: string) => void; status: (which: string) => React.ReactNode; dawarich: React.ReactNode }) {
   const core = f.core_connected || f.movement_via === 'core'
   // what the switch shows: the pick, but never a Movement that cannot work without Core
   const shown = !core ? 'dawarich' : f.location_choice
@@ -311,6 +309,11 @@ function LocationCard({ f, save, run, status }: { f: SettingsT; save: (patch?: P
         <div className={`conn-status ${f.location_works && (shown === 'dawarich' || mvOk) ? 'ok' : 'bad'}`}><span className="dot" />{line}</div>
         {shown === 'movement' && <div className="row wrap"><button className="btn sm" onClick={() => run('movement', '', '')}>Test Pocket Movement</button>{status('movement')}</div>}
       </div>
+      {/* One source, one card: Dawarich's connection shows here while it is the one in use (picked, or filling in for Movement). */}
+      {(shown === 'dawarich' || !mvOk) && <div className="loc-dawarich">
+        <div className="loc-dawarich-h">Dawarich connection</div>
+        {dawarich}
+      </div>}
     </Section>
   )
 }
