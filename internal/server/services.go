@@ -173,17 +173,6 @@ func (s *Server) dawarichFor(ctx context.Context, userID int64) (*dawarich.Clien
 	return dawarich.New(c.url, c.key, 60*time.Second), c, nil
 }
 
-// dawarichVia is serviceStatus's "does it work" part for userID's Dawarich.
-func (s *Server) dawarichVia(ctx context.Context, userID int64) string {
-	u, err := s.store.GetUser(ctx, userID)
-	if err != nil {
-		return ""
-	}
-	st := s.settingsFor(ctx, userID)
-	_, via, _, _ := s.serviceStatus(ctx, u, "dawarich", "Dawarich", st.DawarichMode, st.DawarichURL, st.DawarichAPIKey, false)
-	return via
-}
-
 // viaText is how a working connection reads in a test message.
 func viaText(c *serviceConn) string {
 	if c.via != modeCore {

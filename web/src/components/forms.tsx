@@ -111,7 +111,7 @@ export function FuelModal({ vehicle, fuel, onClose, onSaved }: { vehicle: Vehicl
       <form onSubmit={submit} className="grid" style={{ gap: 14 }}>
         <div className="two-col tight">
           <Field label="Date"><input type="date" value={f.date} onChange={e => set('date', e.target.value)} required /></Field>
-          <Field label={`Odometer (${vehicle.odometer_unit})`} help={vehicle.summary && vehicle.summary.estimate_km > 0 ? `Dawarich estimate ≈ ${Math.round(vehicle.summary.odometer_estimate).toLocaleString()}` : undefined}><input type="number" inputMode="numeric" value={f.odometer || ''} onChange={e => set('odometer', Number(e.target.value))} required autoFocus /></Field>
+          <Field label={`Odometer (${vehicle.odometer_unit})`} help={vehicle.summary && vehicle.summary.estimate_km > 0 ? `Estimate from location history ≈ ${Math.round(vehicle.summary.odometer_estimate).toLocaleString()}` : undefined}><input type="number" inputMode="numeric" value={f.odometer || ''} onChange={e => set('odometer', Number(e.target.value))} required autoFocus /></Field>
         </div>
         <div className="two-col tight">
           <Field label={ev ? 'Energy (kWh)' : `Volume (${VOL_LABEL[u.volume_unit]})`}><input type="number" step="0.001" inputMode="decimal" value={f.volume || ''} onChange={e => set('volume', Number(e.target.value))} required /></Field>

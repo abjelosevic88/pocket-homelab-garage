@@ -410,11 +410,13 @@ func (s *Server) handleVehicleOverview(w http.ResponseWriter, r *http.Request) {
 		months = []store.MonthlyCost{}
 	}
 	cl := s.clientsFor(ctx, userFrom(ctx).ID) // the viewer's own Travel / Inventory / notifications
-	// the Dawarich sync runs with the owner's own connection
-	dawarichOn := v.Dawarich && s.dawarichVia(ctx, v.OwnerID) != ""
+	// the km-driven sync runs with the owner's own location history
+	locKind, locWorks := s.locationVia(ctx, v.OwnerID)
+	dawarichOn := v.Dawarich && locWorks
 	writeJSON(w, http.StatusOK, map[string]any{
 		"vehicle": v, "reminders": rems, "recent_records": recent, "recent_fuel": fuel, "open_plans": open, "pinned_notes": pinned,
 		"expiring_documents": docs, "months": months, "activity": activity, "trips": s.tripsFor(ctx, userFrom(ctx), v),
+		"location":     map[string]any{"source": locKind, "name": locationName(locKind), "works": locWorks},
 		"integrations": map[string]bool{"dawarich": dawarichOn, "travel": s.siblingVia(ctx, userFrom(ctx), "travel", cl.st.TravelMode, cl.st.TravelToken, travelScopes) != "", "inventory": s.siblingVia(ctx, userFrom(ctx), "inventory", cl.st.InventoryMode, cl.st.InventoryToken, inventoryScopes) != "", "notify": cl.notify.Configured()},
 	})
 }

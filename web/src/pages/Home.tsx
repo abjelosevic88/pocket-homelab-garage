@@ -40,7 +40,7 @@ export default function Home() {
         <div className={`hero garage ${main.has_image ? 'has-cover' : ''}`} style={heroStyle} onClick={() => navigate(`/vehicles/${main.id}`)}>
           <div className="hero-body">
             <div>
-              <div className="row" style={{ gap: 8, marginBottom: 6 }}>{main.plate && <span className="status-pill">{main.plate}</span>}{s.reminders_due > 0 && <span className="status-pill"><Icon name="alert" size={12} strokeWidth={2.2} />{s.reminders_due} due</span>}{s.estimate_km > 0 && <span className="status-pill" title="Dawarich kilometres since your last confirmed reading">≈ +{Math.round(s.estimate_km)} {main.odometer_unit} recorded</span>}</div>
+              <div className="row" style={{ gap: 8, marginBottom: 6 }}>{main.plate && <span className="status-pill">{main.plate}</span>}{s.reminders_due > 0 && <span className="status-pill"><Icon name="alert" size={12} strokeWidth={2.2} />{s.reminders_due} due</span>}{s.estimate_km > 0 && <span className="status-pill" title="Kilometres driven (location history) since your last confirmed reading">≈ +{Math.round(s.estimate_km)} {main.odometer_unit} recorded</span>}</div>
               <h1>{main.display_name}</h1>
               <div className="odo-big">{fmtOdo(s.odometer_estimate, main.odometer_unit, false)}<small>{main.odometer_unit}{s.estimate_km > 0 ? ' est.' : ''}</small></div>
               <div className="meta-line"><span>{s.economy ? fmtEcon(s.economy_recent || s.economy, u, main.odometer_unit) : 'no economy yet'}</span><span><Money minor={s.cost_year} code={main.currency} compact /> this year</span>{s.last_fuel && <span>last fill {fmtDate(s.last_fuel.date, false)}</span>}</div>

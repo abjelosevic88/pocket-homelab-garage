@@ -17,7 +17,7 @@ type TabId = 'general' | 'notifications' | 'apps' | 'import' | 'profile' | 'peop
 const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'general', label: 'General', icon: 'settings', sub: 'Currency, units, date and time formats, and the app title.' },
   { id: 'notifications', label: 'Notifications', icon: 'bell', sub: 'Where pushes for due reminders and expiring documents are sent.' },
-  { id: 'apps', label: 'Connected apps', icon: 'layers', sub: 'Pocket Money, Dawarich, Pocket Travel and Pocket Inventory — through Pocket Core or directly.' },
+  { id: 'apps', label: 'Connected apps', icon: 'layers', sub: 'Pocket Money, Pocket Movement, Dawarich, Pocket Travel and Pocket Inventory — through Pocket Core or directly.' },
   { id: 'import', label: 'Import', icon: 'download', sub: 'Bring vehicles over from LubeLogger, or restore a vehicle from a JSON backup.' },
   { id: 'profile', label: 'Profile', icon: 'user', sub: 'Your name, email and password.' },
   { id: 'people', label: 'People', icon: 'users', sub: 'Everyone who has an account on this box.' },
@@ -141,7 +141,7 @@ function General() {
         <dl className="set-dl">
           <div><dt>Fuel</dt><dd className="muted">One row per fill-up. Distance and economy come from the previous full tank; partial fills roll into the next full one.</dd></div>
           <div><dt>Service & costs</dt><dd className="muted">Service, repairs, upgrades and plain expenses in one list with a kind, a category and the parts fitted.</dd></div>
-          <div><dt>Odometer</dt><dd className="muted">Every fill-up or record with a reading <i>is</i> the odometer log. Dawarich adds the kilometres driven since.</dd></div>
+          <div><dt>Odometer</dt><dd className="muted">Every fill-up or record with a reading <i>is</i> the odometer log. Pocket Movement (or Dawarich) adds the kilometres driven since.</dd></div>
           <div><dt>Reminders</dt><dd className="muted">By date, by odometer or both. Recurring ones roll forward when done; logging matching work completes them.</dd></div>
           <div><dt>Pocket Money</dt><dd className="muted">Costs you log can become transactions in your Pocket Money (through Pocket Core, or a token). Edits and deletes follow them.</dd></div>
           <div><dt>Phone & Raycast</dt><dd className="muted">The LubeLogger-shaped API lives at <code>/api/…</code>, so the Pocket Homelab app and the Raycast extension only need the new URL.</dd></div>
@@ -192,9 +192,10 @@ function Integrations() {
   return (
     <div className="stack loose">
       <PocketMoneyCard f={f} setF={setF} run={run} status={status} save={save} />
+      <LocationCard f={f} save={save} run={run} status={status} />
       <Section title="Dawarich" icon="route" actions={connBadge(f.dawarich_mode, f.dawarich_via)}
-        sub="Kilometres you actually drove, per day, from the location history. Pocket Garage adds them on top of the last odometer reading, so the estimate (and reminders by distance) stay current between fill-ups. Turn it on per vehicle under the vehicle's Settings tab.">
-        <Connection app="Dawarich" service source={f.dawarich_source} mode={f.dawarich_mode} via={f.dawarich_via} detail={f.dawarich_detail} core={f.core_configured} hasToken={!!f.dawarich_api_key}
+        sub={<>The alternative location history{f.location_effective === 'dawarich' ? ', in use now' : ''}: Dawarich's driving kilometres per day, used when you pick Dawarich above or while Pocket Movement is not reachable.</>}>
+        <Connection app="Dawarich" service source={f.dawarich_source} mode={f.dawarich_mode} via={f.dawarich_via} detail={f.dawarich_detail} core={f.core_connected} hasToken={!!f.dawarich_api_key}
           onMode={m => save({ dawarich_mode: m })} onDisconnect={() => save({ dawarich_url: '', dawarich_api_key: '' })}
           test={<><button className="btn sm" onClick={() => run('dawarich', f.dawarich_url, f.dawarich_api_key)}>Test connection</button>{status('dawarich')}</>}
           direct={<div className="two-col tight">
@@ -203,7 +204,7 @@ function Integrations() {
           </div>} />
       </Section>
       <Section title="Pocket Travel" icon="plane" actions={connBadge(f.travel_mode, f.travel_via)} sub="Fill-ups and costs that fall inside a trip show up on the vehicle overview per trip, with the kilometres driven.">
-        <Connection app="Pocket Travel" mode={f.travel_mode} via={f.travel_via} detail={f.travel_detail} core={f.core_configured} hasToken={!!f.travel_token}
+        <Connection app="Pocket Travel" mode={f.travel_mode} via={f.travel_via} detail={f.travel_detail} core={f.core_connected} hasToken={!!f.travel_token}
           onMode={m => save({ travel_mode: m })} onDisconnect={() => save({ travel_url: '', travel_token: '', travel_public_url: '' })}
           test={<><button className="btn sm" onClick={() => run('travel', f.travel_url, f.travel_token)}>Test connection</button>{status('travel')}</>}
           direct={<>
@@ -215,7 +216,7 @@ function Integrations() {
           </>} />
       </Section>
       <Section title="Pocket Inventory" icon="package" actions={connBadge(f.inventory_mode, f.inventory_via)} sub="Parts and fluids on the shelf. When you list parts on a record, the name field suggests your inventory items.">
-        <Connection app="Pocket Inventory" mode={f.inventory_mode} via={f.inventory_via} detail={f.inventory_detail} core={f.core_configured} hasToken={!!f.inventory_token}
+        <Connection app="Pocket Inventory" mode={f.inventory_mode} via={f.inventory_via} detail={f.inventory_detail} core={f.core_connected} hasToken={!!f.inventory_token}
           onMode={m => save({ inventory_mode: m })} onDisconnect={() => save({ inventory_url: '', inventory_token: '' })}
           test={<><button className="btn sm" onClick={() => run('inventory', f.inventory_url, f.inventory_token)}>Test connection</button>{status('inventory')}</>}
           direct={<div className="two-col tight">
@@ -236,7 +237,9 @@ function Integrations() {
  * The mode saves at once; Disconnect removes the saved URL and token.
  * With Pocket Core on the box the switch is Pocket Core | Off and Direct is
  * an advanced option behind a link (always shown while it is the mode in
- * use); without Core, Direct is the only way in and shows as usual.
+ * use); without Core, Direct is the only way in and shows as usual, and
+ * Pocket Core stays visible but greyed out with why (a saved "core" then
+ * shows as Direct, which is what it amounts to).
  */
 function Connection({ app, mode, via, detail, core, onMode, onDisconnect, hasToken, test, direct, service, source }: {
   app: string; mode: ConnMode; via: string; detail: string; core: boolean; onMode: (m: ConnMode) => void; onDisconnect: () => void
@@ -244,6 +247,8 @@ function Connection({ app, mode, via, detail, core, onMode, onDisconnect, hasTok
 }) {
   const ok = via !== ''
   const [advanced, setAdvanced] = useState(false)
+  core = core || via === 'core' // a link that works is proof enough of a Core
+  if (!core && mode === 'core') { mode = 'direct'; detail = '' } // what it amounts to without a Core
   const showDirect = !core || mode === 'direct' || advanced
   const secret = service ? 'API key' : 'token'
   const coreOk = service
@@ -256,12 +261,13 @@ function Connection({ app, mode, via, detail, core, onMode, onDisconnect, hasTok
     <div className="conn-block">
       <div className="conn-mode">
         <Segmented size="sm" value={mode} onChange={m => onMode(m as ConnMode)} options={[
-          { value: 'core', label: 'Pocket Core', title: core ? 'Through Pocket Core: per person, nothing to paste' : 'There is no Pocket Core on this box' },
+          { value: 'core', label: 'Pocket Core', title: core ? 'Through Pocket Core: per person, nothing to paste' : 'Needs Pocket Core', disabled: !core },
           ...(showDirect ? [{ value: 'direct', label: 'Direct', title: service ? 'Your own URL and API key' : 'Your own URL and API token' }] : []),
           { value: 'off', label: 'Off' },
         ]} />
         {!showDirect && <button type="button" className="conn-advanced" onClick={() => setAdvanced(true)}>Advanced: connect directly with a URL and key</button>}
       </div>
+      {!core && <CoreHint />}
       <div className={`conn-status ${mode === 'off' ? '' : ok ? 'ok' : 'bad'}`}><span className="dot" />{line}</div>
       {mode === 'direct' && <>
         {direct}
@@ -269,6 +275,43 @@ function Connection({ app, mode, via, detail, core, onMode, onDisconnect, hasTok
       </>}
       {mode === 'core' && <div className="row wrap">{test}</div>}
     </div>
+  )
+}
+
+/** Why a Pocket Core choice is greyed out: shown under it, not as a tooltip (phones have no hover). */
+function CoreHint({ what }: { what?: string }) {
+  return <p className="core-hint">{what ? `${what} needs Pocket Core. ` : 'Needs Pocket Core. '}Pocket Core connects your Pocket apps to each other and to your services: one sign-in for everyone, each person's own accounts, nothing to copy or paste. Set CORE_URL to connect this app. <a href="https://github.com/abjelosevic88/pocket-homelab-core" target="_blank" rel="noreferrer">Learn more</a></p>
+}
+
+/**
+ * Where the kilometres driven come from: Pocket Movement (through Pocket
+ * Core only; its driving journeys) or Dawarich. Nothing picked = Pocket
+ * Movement whenever it is reachable, Dawarich meanwhile.
+ */
+function LocationCard({ f, save, run, status }: { f: SettingsT; save: (patch?: Partial<SettingsT>) => Promise<void>; run: (which: string, url: string, key: string) => void; status: (which: string) => React.ReactNode }) {
+  const core = f.core_connected || f.movement_via === 'core'
+  // what the switch shows: the pick, but never a Movement that cannot work without Core
+  const shown = !core ? 'dawarich' : f.location_choice
+  const mvOk = f.movement_via === 'core'
+  const line = shown === 'dawarich'
+    ? (f.location_works ? 'Dawarich: its driving kilometres per day (connection below).' : 'Dawarich is not connected yet: set it up below.')
+    : mvOk ? `Pocket Movement through Pocket Core, as you: the driving journeys it already classified${f.movement_points_only ? ' (only your raw points are allowed, so the driving is worked out from them)' : ''}. Nothing to fill in.`
+    : `Pocket Movement is not reachable: ${f.movement_detail}. ${f.location_works ? 'Using Dawarich meanwhile, so the estimate keeps going.' : 'Dawarich is not connected either.'}`
+  return (
+    <Section title="Location history" icon="route" actions={<span className={`badge ${f.location_works ? 'ok' : 'warn'}`}>{f.location_works ? (f.location_effective === 'movement' ? 'Pocket Movement' : 'Dawarich') : 'not connected'}</span>}
+      sub="Kilometres you actually drove, per day. Pocket Garage adds them on top of the last odometer reading, so the estimate (and reminders by distance) stay current between fill-ups. Turn it on per vehicle under the vehicle's Settings tab.">
+      <div className="conn-block">
+        <div className="conn-mode">
+          <Segmented size="sm" label="Location history" value={shown} onChange={v => save({ location_source: v as 'movement' | 'dawarich' })} options={[
+            { value: 'movement', label: 'Pocket Movement', title: core ? 'Your driving journeys from Pocket Movement, through Pocket Core' : 'Needs Pocket Core', disabled: !core },
+            { value: 'dawarich', label: 'Dawarich' },
+          ]} />
+        </div>
+        {!core && <CoreHint what="Pocket Movement" />}
+        <div className={`conn-status ${f.location_works && (shown === 'dawarich' || mvOk) ? 'ok' : 'bad'}`}><span className="dot" />{line}</div>
+        {shown === 'movement' && <div className="row wrap"><button className="btn sm" onClick={() => run('movement', '', '')}>Test Pocket Movement</button>{status('movement')}</div>}
+      </div>
+    </Section>
   )
 }
 
@@ -284,7 +327,7 @@ function PocketMoneyCard({ f, setF, run, status, save }: { f: SettingsT; setF: (
   const catOpts = cats.map(c => ({ value: String(c.id), label: c.full_name || c.name }))
   return (
     <Section title="Pocket Money" icon="wallet" actions={connBadge(f.money_mode, f.money_via)} sub="Every fill-up, service, repair or expense you log can become an expense in your Pocket Money, with the vehicle's tag, a link back here and the cost in its own currency. Edits and deletes here follow it there.">
-      <Connection app="Pocket Money" mode={f.money_mode} via={f.money_via} detail={f.money_detail} core={f.core_configured} hasToken={!!f.money_token}
+      <Connection app="Pocket Money" mode={f.money_mode} via={f.money_via} detail={f.money_detail} core={f.core_connected} hasToken={!!f.money_token}
         onMode={m => save({ money_mode: m })} onDisconnect={() => save({ money_url: '', money_token: '' })}
         test={<><button className="btn sm" onClick={() => run('money', f.money_url, f.money_token)}>Test connection</button>{status('money')}</>}
         direct={<div className="two-col tight">

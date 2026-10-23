@@ -10,7 +10,9 @@ export interface Settings {
   notify_url: string; notify_format: string; notify_hour: number; notify_digest: boolean; notify_configured: boolean
   travel_url: string; travel_public_url: string; travel_token: string; travel_configured: boolean
   inventory_url: string; inventory_token: string; inventory_configured: boolean; inventory_take: boolean
-  core_configured: boolean
+  core_configured: boolean; core_connected: boolean
+  location_source: '' | 'movement' | 'dawarich'; location_choice: 'movement' | 'dawarich'; location_effective: 'movement' | 'dawarich'; location_works: boolean
+  movement_via: '' | 'core'; movement_detail: string; movement_points_only: boolean
   travel_mode: ConnMode; travel_via: '' | 'core' | 'direct'; travel_detail: string
   inventory_mode: ConnMode; inventory_via: '' | 'core' | 'direct'; inventory_detail: string
   money_mode: ConnMode; money_via: '' | 'core' | 'direct'; money_detail: string
@@ -82,6 +84,7 @@ export interface Overview {
   vehicle: Vehicle; reminders: Reminder[]; recent_records: Rec[]; recent_fuel: Fuel[]; open_plans: number; pinned_notes: Note[]
   expiring_documents: Doc[]; months: MonthlyCost[]; activity: Activity[]; trips: TripLink[]
   integrations: { dawarich: boolean; travel: boolean; inventory: boolean; notify: boolean }
+  location?: { source: 'movement' | 'dawarich'; name: string; works: boolean }
 }
 
 export interface HomeData {

@@ -50,7 +50,7 @@ export default function Reports() {
       </div>
       <div className="two-col">
         <Card title="Odometer"><Line points={data.odometer.map(o => ({ x: fmtDate(o.date, false), y: o.reading }))} fmt={y => `${fmtNum(y)} ${v.odometer_unit}`} height={170} /></Card>
-        <Card title="Driven per day (Dawarich, last year)">{data.dawarich_days.length === 0 ? <p className="muted small">No recorded days yet. Enable Dawarich for this vehicle under Settings.</p> : <><Line points={data.dawarich_days.map(d => ({ x: fmtDate(d.date, false), y: d.km }))} fmt={y => `${fmtNum(y, 1)} ${v.odometer_unit}`} height={170} /><p className="muted small">{fmtNum(totalDays)} {v.odometer_unit} recorded over {data.dawarich_days.length} days · {fmtNum(totalDays / Math.max(1, data.dawarich_days.length), 1)} a day</p></>}</Card>
+        <Card title="Driven per day (location history, last year)">{data.dawarich_days.length === 0 ? <p className="muted small">No recorded days yet. Turn on location history for this vehicle under Settings.</p> : <><Line points={data.dawarich_days.map(d => ({ x: fmtDate(d.date, false), y: d.km }))} fmt={y => `${fmtNum(y, 1)} ${v.odometer_unit}`} height={170} /><p className="muted small">{fmtNum(totalDays)} {v.odometer_unit} recorded over {data.dawarich_days.length} days · {fmtNum(totalDays / Math.max(1, data.dawarich_days.length), 1)} a day</p></>}</Card>
       </div>
     </>
   )

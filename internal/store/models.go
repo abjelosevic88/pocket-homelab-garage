@@ -365,6 +365,10 @@ type Settings struct {
 	// Pocket Core) | direct (dawarich_url + key above) | off; "" = direct when
 	// a key is saved, else core when Garage is connected to Core, else direct.
 	DawarichMode string `json:"dawarich_mode"`
+	// Where the kilometres driven come from: movement (Pocket Movement,
+	// through Pocket Core only) | dawarich; "" = Pocket Movement when it is
+	// reachable for the person, else Dawarich.
+	LocationSource string `json:"location_source"`
 	// Pocket Money: through a Pocket Core link, or a Money URL + token without Core.
 	MoneyEnabled      bool   `json:"money_enabled"` // offer "Create a transaction" (ticked) when adding costs
 	MoneyURL          string `json:"money_url"`

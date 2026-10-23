@@ -57,6 +57,8 @@ type Server struct {
 	coreOK   bool
 	coreErr  string
 	resolved map[string]resolvedURL
+	// per person: why Pocket Movement was last passed over for Dawarich (location.go)
+	fallbacks map[int64]string
 
 	modesKick chan struct{} // a connection-mode report is due (modes.go)
 }
@@ -617,6 +619,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 			{App: "money", Scopes: moneyScopes, Reason: "Book fuel, service, repairs and other car costs as transactions in Pocket Money"},
 			{App: "travel", Scopes: travelScopes, Reason: "Show the fuel, costs and kilometres of each trip on the vehicle"},
 			{App: "inventory", Scopes: inventoryScopes, Reason: "Offer parts and fluids from your shelf on a service record and take the ones you fitted off it"},
+			{App: "movement", Scopes: movementUseScopes, Reason: "Estimate the odometer between fill-ups from the kilometres you drove (your driving journeys; the raw points only if the timeline is not allowed)"},
 		},
 		Services: serviceUses,
 		Offers:   linkOffers,
@@ -635,6 +638,17 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		s.log.Debug("pocket core: re-registered", "core", s.cfg.CoreURL)
 	}
 	return nil
+}
+
+// coreConnected: Garage has a Pocket Core and is registered with it (what
+// Settings needs before a Pocket Core choice can be picked).
+func (s *Server) coreConnected() bool {
+	if !s.core.Configured() {
+		return false
+	}
+	s.coreMu.Lock()
+	defer s.coreMu.Unlock()
+	return s.coreOK
 }
 
 // publish persists an event locally; the SDK retries network delivery. The payload

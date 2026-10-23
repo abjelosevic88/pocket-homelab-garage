@@ -5,6 +5,7 @@ import (
 	"time"
 
 	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
+	"github.com/abjelosevic88/pocket-homelab-garage/internal/store"
 )
 
 // ---- connection modes on Core's map ----
@@ -34,9 +35,19 @@ func (s *Server) connModes(ctx context.Context) []core.ConnMode {
 			core.ConnMode{User: u.Email, Target: "travel", Mode: connMode(st.TravelMode, st.TravelToken)},
 			core.ConnMode{User: u.Email, Target: "inventory", Mode: connMode(st.InventoryMode, st.InventoryToken)},
 			core.ConnMode{User: u.Email, Target: "service:dawarich", Mode: s.serviceMode(st.DawarichMode, st.DawarichAPIKey)},
+			core.ConnMode{User: u.Email, Target: "movement", Mode: movementMode(st)},
 		)
 	}
 	return out
+}
+
+// movementMode: Pocket Movement is only ever reached through Core; it is off
+// for whoever picked Dawarich.
+func movementMode(st store.Settings) string {
+	if locationChoice(st) == srcDawarich {
+		return modeOff
+	}
+	return modeCore
 }
 
 // reportModes sends the map to Core, when Garage is connected to one.

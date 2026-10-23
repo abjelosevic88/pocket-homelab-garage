@@ -138,6 +138,13 @@ func (s *Store) PutDawarichDay(ctx context.Context, vehicleID int64, date string
 	return err
 }
 
+// DeleteDawarichDaysFrom forgets the stored days from a date on (a switch
+// of location source re-reads them from the new one).
+func (s *Store) DeleteDawarichDaysFrom(ctx context.Context, vehicleID int64, from string) error {
+	_, err := s.DB.ExecContext(ctx, `DELETE FROM dawarich_days WHERE vehicle_id = ? AND date >= ?`, vehicleID, from)
+	return err
+}
+
 // DawarichKmSince sums recorded driving km strictly after a date (the day of
 // the reading itself is counted as known).
 func (s *Store) DawarichKmSince(ctx context.Context, vehicleID int64, date string) float64 {

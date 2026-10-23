@@ -32,9 +32,9 @@ export default function VehicleSettings() {
             {isOwner && <button className="btn primary sm" onClick={save} disabled={busy === 'save'}>Save</button>}
           </div>
         </Card>
-        <Card title={<><Icon name="route" size={16} />Dawarich</>} actions={<span className={`badge ${overview.integrations.dawarich ? 'cat' : ''}`}>{overview.integrations.dawarich ? 'on' : settings?.dawarich_configured ? 'off' : 'not configured'}</span>}>
-          <p className="muted small">Driving kilometres Dawarich records are added on top of your last odometer reading, so reminders by distance stay accurate between fill-ups. Switch it on for the vehicle you drive with the phone that records.</p>
-          <label className="row"><input type="checkbox" checked={f.dawarich} onChange={e => setF({ ...f, dawarich: e.target.checked })} style={{ width: 'auto' }} disabled={!isOwner || !settings?.dawarich_configured} /> This vehicle drives the recorded kilometres{!isOwner && <span className="muted small"> (the owner's Dawarich; only the owner switches it)</span>}</label>
+        <Card title={<><Icon name="route" size={16} />Location history</>} actions={<span className={`badge ${overview.integrations.dawarich ? 'cat' : ''}`}>{overview.integrations.dawarich ? `on · ${overview.location?.name || 'Dawarich'}` : settings?.location_works ? 'off' : 'not configured'}</span>}>
+          <p className="muted small">Driving kilometres from your location history ({overview.location?.name || 'Dawarich'}, chosen under Settings → Connected apps) are added on top of your last odometer reading, so reminders by distance stay accurate between fill-ups. Switch it on for the vehicle you drive with the phone that records.</p>
+          <label className="row"><input type="checkbox" checked={f.dawarich} onChange={e => setF({ ...f, dawarich: e.target.checked })} style={{ width: 'auto' }} disabled={!isOwner || !settings?.location_works} /> This vehicle drives the recorded kilometres{!isOwner && <span className="muted small"> (the owner's location history; only the owner switches it)</span>}</label>
           {isOwner && <div className="mt-sm"><button className="btn primary sm" onClick={save} disabled={busy === 'save'}>Save</button></div>}
         </Card>
         <Card title="Photo">

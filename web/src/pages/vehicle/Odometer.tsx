@@ -19,21 +19,22 @@ export default function OdometerTab() {
   const [del, setDel] = useState<OdometerReading | null>(null)
   const [busy, setBusy] = useState(false)
   const confirm = async () => { setBusy(true); try { await api.post(`${V1}/vehicles/${v.id}/odometer/confirm`); toast('Estimate confirmed as a reading'); reload(); reloadOv() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) } }
-  const sync = async () => { setBusy(true); try { const r = await api.post<{ days: number }>(`${V1}/vehicles/${v.id}/dawarich/sync`); toast(`Dawarich: ${r.days} days refreshed`); reload(); reloadOv() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) } }
+  const sync = async () => { setBusy(true); try { const r = await api.post<{ days: number; source_name?: string }>(`${V1}/vehicles/${v.id}/dawarich/sync`); toast(`${r.source_name || 'Dawarich'}: ${r.days} days refreshed`); reload(); reloadOv() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) } }
   if (loading && !data) return <Loading />
   if (!data) return null
   data.history = data.history || []
   const series = [...data.history].reverse().map(o => ({ x: fmtDate(o.date, false), y: o.reading }))
+  const locName = overview.location?.name || 'Dawarich'
   const src: Record<string, string> = { manual: 'reading', api: 'app', dawarich: 'Dawarich', lubelogger: 'LubeLogger', fuel: 'fill-up', record: 'service' }
   return (
     <>
       <div className="stats">
         <div className="stat"><div className="odo-big">{fmtOdo(data.latest, v.odometer_unit, false)}<small>{v.odometer_unit}</small></div><div className="l">last confirmed{data.latest_date && ` · ${fmtDate(data.latest_date)}`}</div></div>
-        {data.estimate_km > 0 && <div className="stat"><div className="odo-big">{fmtOdo(data.estimate, v.odometer_unit, false)}<small>{v.odometer_unit}</small></div><div className="l">estimate · +{fmtNum(data.estimate_km)} {v.odometer_unit} driven since, per Dawarich {canEdit && <button className="btn sm" onClick={confirm} disabled={busy} style={{ marginLeft: 6 }}>Confirm as reading</button>}</div></div>}
+        {data.estimate_km > 0 && <div className="stat"><div className="odo-big">{fmtOdo(data.estimate, v.odometer_unit, false)}<small>{v.odometer_unit}</small></div><div className="l">estimate · +{fmtNum(data.estimate_km)} {v.odometer_unit} driven since, per {locName} {canEdit && <button className="btn sm" onClick={confirm} disabled={busy} style={{ marginLeft: 6 }}>Confirm as reading</button>}</div></div>}
         {v.summary && v.summary.km_per_year > 0 && <div className="stat"><div className="n">{fmtNum(v.summary.km_per_year)}</div><div className="l">{v.odometer_unit} per year</div></div>}
       </div>
-      {overview.integrations.dawarich ? <p className="muted small mb">Dawarich's driving kilometres per day are added on top of your last reading. Confirm the estimate whenever you glance at the dash — that resets the error. <button className="btn ghost sm" onClick={sync} disabled={busy}>Refresh from Dawarich</button></p>
-        : v.dawarich ? <p className="muted small mb">Dawarich is switched on for this vehicle but not configured under Settings → Integrations.</p> : <p className="muted small mb">Turn on Dawarich under this vehicle's Settings to estimate the odometer between readings from your recorded drives.</p>}
+      {overview.integrations.dawarich ? <p className="muted small mb">{locName}'s driving kilometres per day are added on top of your last reading. Confirm the estimate whenever you glance at the dash — that resets the error. <button className="btn ghost sm" onClick={sync} disabled={busy}>Refresh from {locName}</button></p>
+        : v.dawarich ? <p className="muted small mb">Location history is switched on for this vehicle but neither Pocket Movement nor Dawarich is connected under Settings → Connected apps.</p> : <p className="muted small mb">Turn on location history under this vehicle's Settings to estimate the odometer between readings from your recorded drives.</p>}
       <div className="two-col mb">
         <Card title="Odometer over time"><Line points={series} fmt={y => fmtOdo(y, v.odometer_unit)} height={160} /></Card>
         <Card title="Readings" actions={<>{canEdit && <button className="btn primary sm" onClick={() => setEdit('new')}>+ Reading</button>}<a className="btn sm" href={`${V1}/vehicles/${v.id}/export/odometer.csv`}>CSV</a></>} flush>

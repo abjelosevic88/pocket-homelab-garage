@@ -47,9 +47,12 @@ func (s *Server) publicSettings(ctx context.Context, u *store.User, st store.Set
 	invMode, inventoryVia, invDetail := s.connStatus(ctx, u, "inventory", "Pocket Inventory", st.InventoryMode, st.InventoryToken, inventoryScopes)
 	moneyMode, moneyVia, moneyDetail := s.connStatus(ctx, u, "money", "Pocket Money", st.MoneyMode, st.MoneyToken, moneyScopes)
 	dwMode, dwVia, dwDetail, dwSource := s.serviceStatus(ctx, u, "dawarich", "Dawarich", st.DawarichMode, st.DawarichURL, st.DawarichAPIKey, true)
+	locEff, locWorks, mvVia, mvDetail, mvPoints := s.locationStatus(ctx, u, st)
 	return map[string]any{
-		"core_configured": s.core.Configured(),
-		"travel_mode":     travelMode, "travel_via": travelVia, "travel_detail": travelDetail,
+		"core_configured": s.core.Configured(), "core_connected": s.coreConnected(),
+		"location_source": st.LocationSource, "location_choice": locationChoice(st), "location_effective": locEff, "location_works": locWorks,
+		"movement_via": mvVia, "movement_detail": mvDetail, "movement_points_only": mvPoints,
+		"travel_mode": travelMode, "travel_via": travelVia, "travel_detail": travelDetail,
 		"inventory_mode": invMode, "inventory_via": inventoryVia, "inventory_detail": invDetail, "inventory_take": st.InventoryTake,
 		"money_mode": moneyMode, "money_via": moneyVia, "money_detail": moneyDetail,
 		"dawarich_mode": dwMode, "dawarich_via": dwVia, "dawarich_detail": dwDetail, "dawarich_source": dwSource,
@@ -155,6 +158,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if keys["location_source"] && (in.LocationSource == "" || in.LocationSource == srcMovement || in.LocationSource == srcDawarich) {
+		cur.LocationSource = in.LocationSource
+	}
 	if keys["inventory_take"] {
 		cur.InventoryTake = in.InventoryTake
 	}
@@ -183,7 +189,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.CacheDelete(r.Context(), fmt.Sprintf("travel:trips:%d", u.ID))
-	for _, k := range []string{"travel_mode", "inventory_mode", "money_mode", "dawarich_mode", "travel_token", "inventory_token", "money_token", "dawarich_api_key"} {
+	for _, k := range []string{"location_source", "travel_mode", "inventory_mode", "money_mode", "dawarich_mode", "travel_token", "inventory_token", "money_token", "dawarich_api_key"} {
 		if keys[k] {
 			s.modesChanged() // a mode changed or a connection was removed: tell Core's map
 			break
@@ -248,6 +254,25 @@ func (s *Server) handleIntegrationTest(w http.ResponseWriter, r *http.Request) {
 				km += d.Summary.ModeDistances["driving"]
 			}
 			msg = fmt.Sprintf("Dawarich reachable, %.0f km driven in the last 7 days, %s", km, how)
+		}
+	case "movement":
+		// always through Pocket Core, always live
+		u := userFrom(r.Context())
+		var c *dawarich.Client
+		var points bool
+		if c, points, err = s.movementFor(ctx, u); err == nil {
+			src := &locationSource{kind: srcMovement, client: c, points: points}
+			var days []dayKm
+			days, err = drivingDays(ctx, src, time.Now().AddDate(0, 0, -7), time.Now())
+			km := 0.0
+			for _, d := range days {
+				km += d.km
+			}
+			how := "through Pocket Core"
+			if points {
+				how += ", from the raw points (the timeline is not allowed)"
+			}
+			msg = fmt.Sprintf("Pocket Movement reachable, %.0f km driven in the last 7 days, %s", km, how)
 		}
 	case "notify":
 		f := in.Format
@@ -557,18 +582,15 @@ func majorString(minor int64, code string) string {
 	return strconv.FormatFloat(float64(minor)/math.Pow10(dec), 'f', dec, 64) + " " + code
 }
 
-// autoSync refreshes Dawarich person by person: each owner's vehicles with
-// that owner's own credentials.
+// autoSync refreshes the kilometres driven person by person: each owner's
+// vehicles from that owner's own location history (Pocket Movement or
+// Dawarich, locationFor).
 func (s *Server) autoSync(ctx context.Context) {
 	users, err := s.store.ListUsers(ctx)
 	if err != nil {
 		return
 	}
 	for _, u := range users {
-		st := s.settingsFor(ctx, u.ID)
-		if s.serviceMode(st.DawarichMode, st.DawarichAPIKey) == modeOff {
-			continue
-		}
 		vs, err := s.store.ListVehicles(ctx, store.VehicleFilter{OwnerID: u.ID})
 		if err != nil {
 			continue
@@ -583,79 +605,54 @@ func (s *Server) autoSync(ctx context.Context) {
 			continue
 		}
 		// one answer from Core per person and pass; someone without a
-		// Dawarich of their own is simply skipped
-		dw, _, err := s.dawarichFor(ctx, u.ID)
+		// location history of their own is simply skipped
+		src, err := s.locationFor(ctx, u.ID)
 		if err != nil {
-			s.log.Debug("dawarich sync skipped", "user", u.ID, "err", err)
+			s.log.Debug("location sync skipped", "user", u.ID, "err", err)
 			continue
 		}
+		s.noteFallback(u.ID, src.movementWhy)
 		for _, v := range todo {
-			if _, err := s.syncDawarichWith(ctx, dw, v); err != nil {
-				s.log.Warn("dawarich sync", "vehicle", v.Title(), "err", err)
+			if _, err := s.syncLocation(ctx, src, v); err != nil {
+				s.log.Warn("location sync", "vehicle", v.Title(), "source", src.kind, "err", err)
 			}
 		}
 	}
 }
 
-// ---- Dawarich ----
+// noteFallback logs once per change why a person's kilometres come from
+// Dawarich although Pocket Movement is their choice (e.g. the Core link is
+// switched off), and when Movement is back.
+func (s *Server) noteFallback(userID int64, why string) {
+	s.coreMu.Lock()
+	if s.fallbacks == nil {
+		s.fallbacks = map[int64]string{}
+	}
+	prev, seen := s.fallbacks[userID]
+	s.fallbacks[userID] = why
+	s.coreMu.Unlock()
+	if seen && prev == why {
+		return
+	}
+	if why != "" {
+		s.log.Info("location: Pocket Movement not reachable, using Dawarich meanwhile", "user", userID, "why", why)
+	} else if seen {
+		s.log.Info("location: Pocket Movement reachable again", "user", userID)
+	}
+}
 
-// syncDawarich stores the driving km per day since the last stored day
-// (re-reading the last 3 days, since Dawarich keeps receiving points).
-func (s *Server) syncDawarich(ctx context.Context, v *store.Vehicle) (int, error) {
-	dw, _, err := s.dawarichFor(ctx, v.OwnerID) // the owner's Dawarich, whoever pressed sync
+// ---- kilometres driven ----
+
+// syncDawarich stores the driving km per day from the owner's location
+// history, whoever pressed sync (the route kept its old name).
+func (s *Server) syncDawarich(ctx context.Context, v *store.Vehicle) (int, *locationSource, error) {
+	src, err := s.locationFor(ctx, v.OwnerID)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
-	return s.syncDawarichWith(ctx, dw, v)
-}
-
-// syncDawarichWith is syncDawarich with the owner's Dawarich already in hand.
-func (s *Server) syncDawarichWith(ctx context.Context, dw *dawarich.Client, v *store.Vehicle) (int, error) {
-	last := s.store.LastDawarichDay(ctx, v.ID)
-	from := time.Now().AddDate(0, 0, -90)
-	if last != "" {
-		if t, err := store.ParseDate(last); err == nil {
-			from = t.AddDate(0, 0, -3)
-		}
-	}
-	if v.PurchaseDate != "" {
-		if t, err := store.ParseDate(v.PurchaseDate); err == nil && t.After(from) {
-			from = t
-		}
-	}
-	// the earliest confirmed reading bounds how far back the estimate can matter
-	n := 0
-	to := time.Now()
-	// Dawarich refuses ranges longer than 31 days; walk in 28-day windows.
-	for cur := from; !cur.After(to); cur = cur.AddDate(0, 0, 28) {
-		end := cur.AddDate(0, 0, 28)
-		if end.After(to) {
-			end = to
-		}
-		days, err := dw.Timeline(ctx, cur, end)
-		if err != nil {
-			return n, err
-		}
-		for _, d := range days {
-			km := d.Summary.ModeDistances["driving"]
-			if km == 0 {
-				// older Dawarich without modes: fall back to the day total when it is clearly a drive
-				if d.Summary.TotalDistance > 15 {
-					km = d.Summary.TotalDistance
-				}
-			}
-			if d.Summary.DistanceUnit == "mi" {
-				km *= 1.609344
-			}
-			if v.OdometerUnit == "mi" {
-				km /= 1.609344
-			}
-			if err := s.store.PutDawarichDay(ctx, v.ID, d.Date, km, d.Summary.TotalDistance); err == nil {
-				n++
-			}
-		}
-	}
-	return n, nil
+	s.noteFallback(v.OwnerID, src.movementWhy)
+	n, err := s.syncLocation(ctx, src, v)
+	return n, src, err
 }
 
 func (s *Server) handleDawarichSync(w http.ResponseWriter, r *http.Request) {
@@ -663,14 +660,14 @@ func (s *Server) handleDawarichSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v := vehicleFrom(r.Context()).vehicle
-	n, err := s.syncDawarich(r.Context(), v)
+	n, src, err := s.syncDawarich(r.Context(), v)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	reading, date := s.store.LatestOdometer(r.Context(), v.ID)
 	est := s.store.DawarichKmSince(r.Context(), v.ID, date)
-	writeJSON(w, http.StatusOK, map[string]any{"days": n, "estimate_km": est, "estimate": reading + est})
+	writeJSON(w, http.StatusOK, map[string]any{"days": n, "estimate_km": est, "estimate": reading + est, "source": src.kind, "source_name": locationName(src.kind)})
 }
 
 func (s *Server) handleDawarichDays(w http.ResponseWriter, r *http.Request) {

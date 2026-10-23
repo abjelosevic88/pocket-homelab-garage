@@ -87,6 +87,7 @@ func TestConnectionModesReportedToCore(t *testing.T) {
 	// chosen and no token means Pocket Core).
 	want := map[string]string{
 		"owner@example.com money": "core", "owner@example.com travel": "core", "owner@example.com inventory": "core", "owner@example.com service:dawarich": "direct",
+		"owner@example.com movement": "core", "member@example.com movement": "core",
 		"member@example.com money": "core", "member@example.com travel": "core", "member@example.com inventory": "core", "member@example.com service:dawarich": "core",
 	}
 	got := c.waitReport(t, 1)
@@ -117,11 +118,20 @@ func TestConnectionModesReportedToCore(t *testing.T) {
 		t.Fatalf("after off %v", got)
 	}
 
+	// Picking Dawarich switches Pocket Movement off on the map.
+	if code, body := p.do(p.bTok, "PUT", "/api/v1/settings", map[string]any{"location_source": "dawarich"}); code != 200 {
+		t.Fatalf("location source %d %s", code, body)
+	}
+	got = c.waitReport(t, 4)
+	if got["member@example.com movement"] != "off" || got["owner@example.com movement"] != "core" {
+		t.Fatalf("after dawarich pick %v", got)
+	}
+
 	// Disconnecting removes the token: back to Pocket Core.
 	if code, body := p.do(p.aTok, "PUT", "/api/v1/settings", map[string]any{"travel_url": "", "travel_token": ""}); code != 200 {
 		t.Fatalf("disconnect %d %s", code, body)
 	}
-	got = c.waitReport(t, 4)
+	got = c.waitReport(t, 5)
 	if got["owner@example.com travel"] != "core" {
 		t.Fatalf("after disconnect %v", got)
 	}
