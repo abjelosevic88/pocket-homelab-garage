@@ -18,7 +18,7 @@ import (
 // stays closed to it, and so does the LubeLogger-compatible /api/* surface.
 
 var linkOffers = []core.Offer{
-	{Scope: "vehicles:read", Name: "See your vehicles and their costs", Description: "List your vehicles, fill-ups and service records, for your journal."},
+	{Scope: "vehicles:read", Name: "See your vehicles and their costs", Description: "List your vehicles, fill-ups, service records, reminders and papers with their end dates, for your journal and Pocket Renewals."},
 }
 
 type linkRoute struct {
@@ -33,6 +33,9 @@ var linkRoutes = []linkRoute{
 	{"GET", regexp.MustCompile(`^/api/v1/vehicles/\d+$`), "vehicles:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/vehicles/\d+/fuel$`), "vehicles:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/vehicles/\d+/records$`), "vehicles:read"},
+	// dated reminders and papers with an end date (Pocket Renewals tracks registration, inspection, insurance)
+	{"GET", regexp.MustCompile(`^/api/v1/reminders$`), "vehicles:read"},
+	{"GET", regexp.MustCompile(`^/api/v1/vehicles/\d+/(reminders|documents)$`), "vehicles:read"},
 }
 
 var errLinkScope = errors.New("outside the link's scope")

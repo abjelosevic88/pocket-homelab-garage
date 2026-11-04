@@ -92,7 +92,7 @@ func TestCoreLinkVehiclesRead(t *testing.T) {
 	}
 
 	// the owner's car is invisible until it is shared with the member
-	for _, path := range []string{ov, ov + "/fuel", ov + "/records"} {
+	for _, path := range []string{ov, ov + "/fuel", ov + "/records", ov + "/reminders", ov + "/documents"} {
 		if code, _ := p.do(day, "GET", path, nil); code != http.StatusNotFound {
 			t.Fatalf("GET %s (someone else's car) through the link: %d, want 404", path, code)
 		}
@@ -106,15 +106,21 @@ func TestCoreLinkVehiclesRead(t *testing.T) {
 	if code, body := p.do(day, "GET", ov+"/records", nil); code != 200 || !strings.Contains(body, "Owner secret repair") {
 		t.Fatalf("shared car's records through the link: %d %s", code, body)
 	}
+	// reminders and papers with end dates (what Pocket Renewals reads)
+	for _, path := range []string{ov + "/reminders", ov + "/documents", "/api/v1/reminders"} {
+		if code, body := p.do(day, "GET", path, nil); code != 200 {
+			t.Fatalf("GET %s through the link: %d %s", path, code, body)
+		}
+	}
 
 	// read-only: no writes even on a car the person may edit, nothing outside the scope
 	for _, c := range []struct{ m, p string }{
 		{"POST", "/api/v1/vehicles"}, {"PUT", mv}, {"DELETE", mv}, {"POST", mv + "/fuel"}, {"POST", mv + "/records"},
 		{"PUT", fmt.Sprintf("%s/records/%d", ov, g.record)}, {"GET", fmt.Sprintf("%s/records/%d", ov, g.record)},
 		{"GET", fmt.Sprintf("%s/fuel/%d", ov, g.fuel)}, {"POST", fmt.Sprintf("%s/fuel/%d/money", ov, g.fuel)},
-		{"GET", ov + "/notes"}, {"GET", ov + "/documents"}, {"GET", ov + "/overview"}, {"GET", ov + "/odometer"},
-		{"GET", ov + "/reminders"}, {"GET", ov + "/export/vehicle.json"}, {"PUT", ov + "/members"},
-		{"GET", "/api/v1/dashboard"}, {"GET", "/api/v1/home"}, {"GET", "/api/v1/reminders"}, {"GET", "/api/v1/money"},
+		{"GET", ov + "/notes"}, {"GET", ov + "/overview"}, {"GET", ov + "/odometer"},
+		{"GET", ov + "/export/vehicle.json"}, {"PUT", ov + "/members"},
+		{"GET", "/api/v1/dashboard"}, {"GET", "/api/v1/home"}, {"GET", "/api/v1/money"},
 		{"GET", "/api/v1/inventory/search"}, {"PUT", "/api/v1/auth/me"}, {"POST", "/api/v1/auth/logout"},
 	} {
 		if code, _ := p.do(day, c.m, c.p, map[string]any{}); code != http.StatusForbidden {
