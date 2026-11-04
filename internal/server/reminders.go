@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
+
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/store"
 )
 
@@ -198,7 +200,7 @@ func (s *Server) handleCreateReminder(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, msg)
 		return
 	}
-	if err := s.store.CreateReminder(r.Context(), rm); err != nil {
+	if err := s.store.CreateReminder(r.Context(), rm, s.reminderEvent(r.Context(), v, rm)); err != nil {
 		s.fail(w, err, "create reminder")
 		return
 	}
@@ -235,7 +237,7 @@ func (s *Server) handleUpdateReminder(w http.ResponseWriter, r *http.Request) {
 	if keys["due_date"] || keys["due_odometer"] {
 		rm.NotifiedLevel = ""
 	}
-	if err := s.store.UpdateReminder(r.Context(), rm); err != nil {
+	if err := s.store.UpdateReminder(r.Context(), rm, s.reminderEvent(r.Context(), v, rm)); err != nil {
 		s.fail(w, err, "update reminder")
 		return
 	}
@@ -304,8 +306,13 @@ func (s *Server) handleReminderDone(w http.ResponseWriter, r *http.Request) {
 		s.store.LogActivity(r.Context(), v.ID, uid, "added "+rec.Kind, rec.Description)
 		s.bookRecord(r.Context(), userFrom(r.Context()), v, rec, in.moneyChoice)
 	}
+	was := rm.DueDate
 	store.RollForward(rm, in.Date, in.Odometer)
-	if err := s.store.UpdateReminder(r.Context(), rm); err != nil {
+	var ev core.CommitHook
+	if rm.DueDate != was {
+		ev = s.reminderEvent(r.Context(), v, rm)
+	}
+	if err := s.store.UpdateReminder(r.Context(), rm, ev); err != nil {
 		s.fail(w, err, "update reminder")
 		return
 	}
@@ -332,6 +339,7 @@ func (s *Server) handleReminderSnooze(w http.ResponseWriter, r *http.Request) {
 	if in.Days <= 0 && in.Km <= 0 {
 		in.Days = 7
 	}
+	was := rm.DueDate
 	if in.Days > 0 {
 		base := rm.DueDate
 		if base == "" || base < store.Today() {
@@ -344,7 +352,11 @@ func (s *Server) handleReminderSnooze(w http.ResponseWriter, r *http.Request) {
 		rm.DueOdometer = &n
 	}
 	rm.NotifiedLevel = ""
-	if err := s.store.UpdateReminder(r.Context(), rm); err != nil {
+	var ev core.CommitHook
+	if rm.DueDate != was {
+		ev = s.reminderEvent(r.Context(), v, rm)
+	}
+	if err := s.store.UpdateReminder(r.Context(), rm, ev); err != nil {
 		s.fail(w, err, "snooze")
 		return
 	}
@@ -693,7 +705,7 @@ func (s *Server) handleUploadDocument(w http.ResponseWriter, r *http.Request) {
 		d.ExpiresOn = ""
 	}
 	s.checkDocLink(r.Context(), d)
-	if err := s.store.CreateDocument(r.Context(), d); err != nil {
+	if err := s.store.CreateDocument(r.Context(), d, s.documentEvent(r.Context(), v, d)); err != nil {
 		s.fail(w, err, "create document")
 		return
 	}
@@ -738,7 +750,7 @@ func (s *Server) handleUpdateDocument(w http.ResponseWriter, r *http.Request) {
 		d.LinkID = *in.LinkID
 	}
 	s.checkDocLink(r.Context(), d)
-	if err := s.store.UpdateDocument(r.Context(), d); err != nil {
+	if err := s.store.UpdateDocument(r.Context(), d, s.documentEvent(r.Context(), v, d)); err != nil {
 		s.fail(w, err, "update document")
 		return
 	}

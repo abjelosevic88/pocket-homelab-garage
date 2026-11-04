@@ -105,6 +105,18 @@ Another Pocket app the person allowed in Pocket Core (Pocket Day, for the journa
 | any linked app | GET `/auth/me` |
 | `vehicles:read` | GET `/vehicles` (`?bare=1` skips the summaries), `/vehicles/{id}`, `/vehicles/{id}/fuel`, `/vehicles/{id}/records` (`?from=&to=`) |
 
+## Pocket Core events
+
+With Pocket Core on the box, Garage queues these events in the same database write as the change (delivered from an outbox, so a Core outage only delays them). Every payload also carries `owner_id`, `owner_email` and `user_email` (the vehicle owner).
+
+| Topic | Subject | When | Payload |
+|---|---|---|---|
+| `garage.fuel_logged` | `fuel:<id>` | a fill-up is added | `fuel_id`, `vehicle_id`, `vehicle`, `date`, `station`, `odometer`, `volume`, `cost`, `currency`, `full_tank` |
+| `garage.service_logged` | `record:<id>` | a record is added | `record_id`, `vehicle_id`, `vehicle`, `kind`, `category`, `description`, `date`, `odometer`, `cost`, `currency` |
+| `garage.odometer_updated` | `odometer:<id>` | a reading is added or a Dawarich estimate confirmed | `odometer_id`, `vehicle_id`, `vehicle`, `date`, `reading`, `source` |
+| `garage.reminder_saved` | `reminder:<id>` | a reminder is created or edited, or its due date moves (marked done and rolled forward, snoozed, auto-completed by a matching service) | `reminder_id`, `vehicle_id`, `vehicle`, `title`, `due_date` (empty for distance-only reminders) |
+| `garage.document_saved` | `document:<id>` | a paper is uploaded or edited | `document_id`, `vehicle_id`, `vehicle`, `name`, `kind`, `expires_on` (empty when it has no end date) |
+
 ## LubeLogger-compatible API
 
 Mounted at `/api/…` (no `/v1`). Auth: **Basic** with a Pocket Garage email + password, or a bearer token. Bodies may be form-encoded or JSON; numbers are read with either decimal separator; dates come back as ISO. Send `culture-invariant: true` to receive JSON numbers instead of strings (the Pocket Homelab app does).

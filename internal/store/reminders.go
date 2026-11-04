@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 	"time"
+
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 )
 
 const reminderCols = `id, vehicle_id, title, notes, kind, category, due_date, due_odometer, interval_days, interval_km, soon_days, soon_km, status, last_done_date, last_done_odo, notified_level, notified_at, external_id, created_at, updated_at`
@@ -16,8 +18,8 @@ func scanReminder(row interface{ Scan(...any) error }) (*Reminder, error) {
 	return &r, nil
 }
 
-// CreateReminder inserts a reminder.
-func (s *Store) CreateReminder(ctx context.Context, r *Reminder) error {
+// CreateReminder inserts a reminder; after hooks run in the same transaction.
+func (s *Store) CreateReminder(ctx context.Context, r *Reminder, after ...core.CommitHook) error {
 	if r.Status == "" {
 		r.Status = "active"
 	}
@@ -27,21 +29,34 @@ func (s *Store) CreateReminder(ctx context.Context, r *Reminder) error {
 	if r.SoonKm == 0 {
 		r.SoonKm = 500
 	}
-	res, err := s.DB.ExecContext(ctx, `INSERT INTO reminders (vehicle_id, title, notes, kind, category, due_date, due_odometer, interval_days, interval_km, soon_days, soon_km, status, last_done_date, last_done_odo, external_id)
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `INSERT INTO reminders (vehicle_id, title, notes, kind, category, due_date, due_odometer, interval_days, interval_km, soon_days, soon_km, status, last_done_date, last_done_odo, external_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.VehicleID, r.Title, r.Notes, r.Kind, r.Category, r.DueDate, nullF(r.DueOdometer), r.IntervalDays, r.IntervalKm, r.SoonDays, r.SoonKm, r.Status, r.LastDoneDate, nullF(r.LastDoneOdo), r.ExternalID)
 	if err != nil {
 		return conflict(err)
 	}
 	r.ID, _ = res.LastInsertId()
-	return nil
+	return core.Commit(tx, after...)
 }
 
-// UpdateReminder saves every column.
-func (s *Store) UpdateReminder(ctx context.Context, r *Reminder) error {
-	_, err := s.DB.ExecContext(ctx, `UPDATE reminders SET title=?, notes=?, kind=?, category=?, due_date=?, due_odometer=?, interval_days=?, interval_km=?, soon_days=?, soon_km=?, status=?, last_done_date=?, last_done_odo=?, notified_level=?, notified_at=?, updated_at=? WHERE id=? AND vehicle_id=?`,
+// UpdateReminder saves every column; after hooks run in the same transaction.
+func (s *Store) UpdateReminder(ctx context.Context, r *Reminder, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `UPDATE reminders SET title=?, notes=?, kind=?, category=?, due_date=?, due_odometer=?, interval_days=?, interval_km=?, soon_days=?, soon_km=?, status=?, last_done_date=?, last_done_odo=?, notified_level=?, notified_at=?, updated_at=? WHERE id=? AND vehicle_id=?`,
 		r.Title, r.Notes, r.Kind, r.Category, r.DueDate, nullF(r.DueOdometer), r.IntervalDays, r.IntervalKm, r.SoonDays, r.SoonKm, r.Status, r.LastDoneDate, nullF(r.LastDoneOdo), r.NotifiedLevel, r.NotifiedAt, Now(), r.ID, r.VehicleID)
-	return err
+	if err != nil {
+		return err
+	}
+	return core.Commit(tx, after...)
 }
 
 // GetReminder loads one reminder (urgency not computed).

@@ -1,6 +1,10 @@
 package store
 
-import "context"
+import (
+	"context"
+
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
+)
 
 const planCols = `id, vehicle_id, title, notes, kind, category, priority, stage, estimate, target_date, record_id, sort_order, external_id, created_at, updated_at`
 
@@ -162,21 +166,35 @@ func scanDoc(row interface{ Scan(...any) error }) (*Document, error) {
 	return &d, nil
 }
 
-// CreateDocument inserts a document row (the file is already on disk).
-func (s *Store) CreateDocument(ctx context.Context, d *Document) error {
-	res, err := s.DB.ExecContext(ctx, `INSERT INTO documents (vehicle_id, user_id, name, filename, mime, bytes, kind, expires_on, link_kind, link_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+// CreateDocument inserts a document row (the file is already on disk); after
+// hooks run in the same transaction.
+func (s *Store) CreateDocument(ctx context.Context, d *Document, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `INSERT INTO documents (vehicle_id, user_id, name, filename, mime, bytes, kind, expires_on, link_kind, link_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		d.VehicleID, nullI(d.UserID), d.Name, d.Filename, d.Mime, d.Bytes, d.Kind, d.ExpiresOn, d.LinkKind, d.LinkID)
 	if err != nil {
 		return err
 	}
 	d.ID, _ = res.LastInsertId()
-	return nil
+	return core.Commit(tx, after...)
 }
 
-// UpdateDocument saves the editable fields.
-func (s *Store) UpdateDocument(ctx context.Context, d *Document) error {
-	_, err := s.DB.ExecContext(ctx, `UPDATE documents SET name=?, kind=?, expires_on=?, link_kind=?, link_id=? WHERE id=? AND vehicle_id=?`, d.Name, d.Kind, d.ExpiresOn, d.LinkKind, d.LinkID, d.ID, d.VehicleID)
-	return err
+// UpdateDocument saves the editable fields; after hooks run in the same
+// transaction.
+func (s *Store) UpdateDocument(ctx context.Context, d *Document, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `UPDATE documents SET name=?, kind=?, expires_on=?, link_kind=?, link_id=? WHERE id=? AND vehicle_id=?`, d.Name, d.Kind, d.ExpiresOn, d.LinkKind, d.LinkID, d.ID, d.VehicleID); err != nil {
+		return err
+	}
+	return core.Commit(tx, after...)
 }
 
 // GetDocument loads a document.

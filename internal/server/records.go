@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
+
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/currency"
 	"github.com/abjelosevic88/pocket-homelab-garage/internal/store"
 )
@@ -166,8 +168,13 @@ func (s *Server) afterRecordChange(ctx context.Context, v *store.Vehicle, rec *s
 		if !close {
 			continue
 		}
+		was := rm.DueDate
 		store.RollForward(rm, rec.Date, rec.Odometer)
-		_ = s.store.UpdateReminder(ctx, rm)
+		var ev core.CommitHook
+		if rm.DueDate != was {
+			ev = s.reminderEvent(ctx, v, rm)
+		}
+		_ = s.store.UpdateReminder(ctx, rm, ev)
 		s.store.LogActivity(ctx, v.ID, 0, "reminder rolled forward", rm.Title)
 	}
 }

@@ -614,7 +614,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		Description: "Every vehicle on one page: fuel with real economy, service and repairs, expenses, odometer, reminders, notes and documents.",
 		Icon:        "/favicon.svg", Version: Version,
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "GARAGE",
-		Publishes: []string{"garage.fuel_logged", "garage.service_logged", "garage.odometer_updated"},
+		Publishes: []string{"garage.fuel_logged", "garage.service_logged", "garage.odometer_updated", "garage.reminder_saved", "garage.document_saved"},
 		Uses: []core.Use{
 			{App: "money", Scopes: moneyScopes, Reason: "Book fuel, service, repairs and other car costs as transactions in Pocket Money"},
 			{App: "travel", Scopes: travelScopes, Reason: "Show the fuel, costs and kilometres of each trip on the vehicle"},
