@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useApp } from '../lib/app-context'
 import { fmtMoney } from '../lib/format'
 import { KIND_LABEL, SERIES, SERIES_ORDER, type MonthlyCost } from '../lib/types'
@@ -7,22 +7,39 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 function monthLabel(m: string): string { const [y, mm] = m.split('-'); return `${MON[Number(mm) - 1]}${mm === '01' ? ` ${y.slice(2)}` : ''}` }
 function useSeriesColor() { const { theme } = useApp(); return (k: string) => (SERIES[k] || SERIES.expense)[theme] }
 
+/** The element's real width, so a chart draws 1:1 and its text, dots and corners keep their shape. */
+function useWidth(fallback: number) {
+  const [w, setW] = useState(fallback)
+  const ro = useRef<ResizeObserver | null>(null)
+  const ref = useCallback((el: Element | null) => {
+    ro.current?.disconnect()
+    ro.current = null
+    if (!el) return
+    const measure = () => { const cw = Math.round(el.getBoundingClientRect().width); if (cw > 0) setW(cw) }
+    measure()
+    ro.current = new ResizeObserver(measure)
+    ro.current.observe(el)
+  }, [])
+  return [ref, w] as const
+}
+
 /** Stacked monthly cost bars: one column per month, a 2px surface gap between segments, legend below, hover tooltip. */
 export function CostBars({ data, currency, decimals = 2, height = 180 }: { data: MonthlyCost[]; currency: string; decimals?: number; height?: number }) {
   const color = useSeriesColor()
   const [hover, setHover] = useState<number | null>(null)
   const kinds = useMemo(() => SERIES_ORDER.filter(k => data.some(d => (d.by_kind[k] || 0) > 0)), [data])
   const max = Math.max(1, ...data.map(d => d.total))
-  const W = 100, H = height, padB = 2, padT = 6
+  const [ref, W] = useWidth(600)
+  const H = height, padB = 2, padT = 6
   const n = Math.max(1, data.length)
   const slot = W / n
-  const bw = Math.min(slot * 0.68, 9)
+  const bw = Math.min(slot * 0.68, 48)
   const y = (v: number) => padT + (H - padT - padB) * (1 - v / max)
   if (data.length === 0) return <p className="muted small">No costs in this period yet.</p>
   const h = hover == null ? null : data[hover]
   return (
     <div className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="chart-svg" style={{ height }} role="img" aria-label="Costs per month">
+      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="chart-svg" role="img" aria-label="Costs per month">
         {[0.5, 1].map(f => <line key={f} x1="0" x2={W} y1={y(max * f)} y2={y(max * f)} className="grid-line" />)}
         {data.map((d, i) => {
           let acc = 0
@@ -35,7 +52,7 @@ export function CostBars({ data, currency, decimals = 2, height = 180 }: { data:
                 if (!v) return null
                 const y0 = y(acc + v), y1 = y(acc)
                 acc += v
-                return <rect key={k} x={x} y={y0} width={bw} height={Math.max(0, y1 - y0 - 0.6)} fill={color(k)} opacity={hover == null || hover === i ? 1 : 0.45} rx={acc === d.total ? 1 : 0} />
+                return <rect key={k} x={x} y={y0} width={bw} height={Math.max(0, y1 - y0 - 0.6)} fill={color(k)} opacity={hover == null || hover === i ? 1 : 0.45} rx={acc === d.total ? Math.min(3, bw / 4) : 0} />
               })}
             </g>
           )
@@ -55,9 +72,10 @@ export function Line({ points, fmt, height = 160, color, baseline }: { points: P
   const { theme } = useApp()
   const c = color || SERIES.fuel[theme]
   const [hover, setHover] = useState<number | null>(null)
+  const [ref, W] = useWidth(600)
   const pts = points.filter(p => Number.isFinite(p.y))
   if (pts.length < 2) return <p className="muted small">Not enough data yet — two full tanks make the first point.</p>
-  const W = 100, H = height, padT = 8, padB = 4, padX = 2
+  const H = height, padT = 8, padB = 4, padX = 10
   const ys = pts.map(p => p.y)
   let lo = Math.min(...ys), hi = Math.max(...ys)
   if (baseline != null) { lo = Math.min(lo, baseline); hi = Math.max(hi, baseline) }
@@ -79,13 +97,13 @@ export function Line({ points, fmt, height = 160, color, baseline }: { points: P
   }
   return (
     <div className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="chart-svg" style={{ height }} onMouseMove={onMove} onTouchMove={onMove} onMouseLeave={() => setHover(null)} role="img">
+      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="chart-svg" onMouseMove={onMove} onTouchMove={onMove} onMouseLeave={() => setHover(null)} role="img">
         <line x1="0" x2={W} y1={y(avg)} y2={y(avg)} className="grid-line dashed" />
         {baseline != null && <line x1="0" x2={W} y1={y(baseline)} y2={y(baseline)} className="grid-line" />}
         <path d={d} fill="none" stroke={c} strokeWidth="1.6" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
         {hover != null && <>
           <line x1={x(hover)} x2={x(hover)} y1={padT} y2={H - padB} className="grid-line" />
-          <circle cx={x(hover)} cy={y(pts[hover].y)} r="2.2" fill={c} className="pt-ring" vectorEffect="non-scaling-stroke" />
+          <circle cx={x(hover)} cy={y(pts[hover].y)} r="4" fill={c} className="pt-ring" />
         </>}
       </svg>
       <div className="chart-axis two"><span>{pts[0].x}</span><span>{pts[pts.length - 1].x}</span></div>
