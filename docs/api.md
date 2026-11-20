@@ -63,10 +63,14 @@ Fields: `title`, `notes`, `kind` (what "done" logs; `none` for a plain reminder)
 | POST | `/notify/test` · `/notify/run?force=1` | |
 | POST | `/import/lubelogger/vehicles` · `/import/lubelogger` | `{url, username, password, currency, vehicles:[ids]}` |
 | POST | `/import/vehicle` | a JSON backup |
+| POST | `/import` | `GET /export.json` (every vehicle you own) or one vehicle backup; adds only vehicles you do not have yet (same VIN, else plate, else name/year/make/model): `{vehicles, skipped, records, fuel, …}` |
 
 ### Exports
 `GET /vehicles/{id}/export/calendar.ics` · `/export/records.csv?kind=` · `/export/fuel.csv` · `/export/odometer.csv` · `/export/vehicle.json`.
+`GET /export.json` is every vehicle you own, each as its vehicle backup.
 Calendar subscription without a session: `GET /cal/{id}.ics?token=<api token>`.
+
+Pocket Move can copy your vehicles out and bring them in: `GET /pocket/portable` describes `GET /export.json` and `POST /import` under the link scopes `move:export` and `move:import`.
 
 ## Dashboard (Homepage widget)
 

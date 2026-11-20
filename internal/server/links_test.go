@@ -156,7 +156,7 @@ func TestCoreLinkVehiclesRead(t *testing.T) {
 	if err := p.s.registerWithCore(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if m := manifest(); len(m.Offers) != 2 || m.Offers[0].Scope != "vehicles:read" {
+	if m := manifest(); len(m.Offers) != 4 || m.Offers[0].Scope != "vehicles:read" || m.Offers[3].Scope != core.ScopeMoveImport {
 		t.Errorf("manifest offers: %+v", m.Offers)
 	}
 }

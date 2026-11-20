@@ -452,6 +452,9 @@ func (s *Server) Router() http.Handler {
 			r.Post("/import/lubelogger/vehicles", s.handleLLVehicles)
 			r.Post("/import/lubelogger", s.handleLLImport)
 			r.Post("/import/vehicle", s.handleImportJSON)
+			r.Get("/export.json", s.handleExportAll)
+			r.Post("/import", s.handleImportAll)
+			r.Get(strings.TrimPrefix(core.PortablePath, "/api/v1"), portable.Handler())
 
 			r.Get("/users", s.handleListUsers)
 			r.Post("/users", s.handleCreateUser)
@@ -623,6 +626,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		},
 		Services: serviceUses,
 		Offers:   linkOffers,
+		Portable: portable,
 	}
 	if s.cfg.BaseURL != "" {
 		// ask Core for a relying-party client so "Sign in with Pocket Core" needs no configuration

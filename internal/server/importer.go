@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"path"
@@ -382,8 +383,16 @@ type vehicleBackup struct {
 }
 
 func (s *Server) handleExportJSON(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	v := vehicleFrom(ctx).vehicle
+	v := vehicleFrom(r.Context()).vehicle
+	b := s.vehicleBackup(r.Context(), v)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+safeName(v.Title())+`.json"`)
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(b)
+}
+
+func (s *Server) vehicleBackup(ctx context.Context, v *store.Vehicle) vehicleBackup {
 	b := vehicleBackup{Format: "pocket-garage/vehicle", Version: Version, Exported: store.Now(), Vehicle: v}
 	b.Records, _ = s.store.ListRecords(ctx, v.ID, store.RecordFilter{})
 	b.Fuel, _ = s.store.ListFuel(ctx, v.ID)
@@ -397,11 +406,7 @@ func (s *Server) handleExportJSON(w http.ResponseWriter, r *http.Request) {
 	b.Plans, _ = s.store.ListPlans(ctx, v.ID)
 	b.Notes, _ = s.store.ListNotes(ctx, v.ID)
 	b.Days, _ = s.store.DawarichDays(ctx, v.ID, "2000-01-01", "2100-01-01")
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+safeName(v.Title())+`.json"`)
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(b)
+	return b
 }
 
 func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
@@ -412,43 +417,166 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "not a Pocket Garage vehicle backup")
 		return
 	}
-	v := *b.Vehicle
-	v.ID, v.OwnerID, v.ImagePath, v.HasImage, v.ExternalID = 0, u.ID, "", false, ""
-	if err := s.store.CreateVehicle(ctx, &v); err != nil {
+	v, _, err := s.importVehicle(ctx, u.ID, &b)
+	if err != nil {
 		s.fail(w, err, "create vehicle")
 		return
 	}
-	uid := u.ID
+	writeJSON(w, http.StatusCreated, v)
+}
+
+// importVehicle adds a vehicle backup as a new vehicle of uid, with its
+// records, fuel, readings, reminders, plans, notes and driven days.
+func (s *Server) importVehicle(ctx context.Context, uid int64, b *vehicleBackup) (*store.Vehicle, map[string]int, error) {
+	v := *b.Vehicle
+	v.ID, v.OwnerID, v.ImagePath, v.HasImage, v.ExternalID = 0, uid, "", false, ""
+	v.Members, v.Summary, v.Role = nil, nil, ""
+	if err := s.store.CreateVehicle(ctx, &v); err != nil {
+		return nil, nil, err
+	}
+	n := map[string]int{}
+	add := func(kind string, err error) {
+		if err == nil {
+			n[kind]++
+		}
+	}
 	for _, rc := range b.Records {
 		rc.ID, rc.VehicleID, rc.ExternalID, rc.FireflyID, rc.CreatedBy = 0, v.ID, "", "", &uid
 		if rc.Parts == nil {
 			rc.Parts = []store.Part{}
 		}
-		_ = s.store.CreateRecord(ctx, &rc)
+		add("records", s.store.CreateRecord(ctx, &rc))
 	}
 	for _, f := range b.Fuel {
 		f.ID, f.VehicleID, f.ExternalID, f.FireflyID, f.CreatedBy = 0, v.ID, "", "", &uid
-		_ = s.store.CreateFuel(ctx, &f)
+		add("fuel", s.store.CreateFuel(ctx, &f))
 	}
 	for _, o := range b.Odometer {
 		o.ID, o.VehicleID, o.ExternalID = 0, v.ID, ""
-		_ = s.store.CreateOdometer(ctx, &o)
+		add("odometer", s.store.CreateOdometer(ctx, &o))
 	}
 	for _, rm := range b.Reminders {
 		rm.ID, rm.VehicleID, rm.ExternalID = 0, v.ID, ""
-		_ = s.store.CreateReminder(ctx, &rm)
+		add("reminders", s.store.CreateReminder(ctx, &rm))
 	}
 	for _, p := range b.Plans {
 		p.ID, p.VehicleID, p.RecordID, p.ExternalID = 0, v.ID, nil, ""
-		_ = s.store.CreatePlan(ctx, &p)
+		add("plans", s.store.CreatePlan(ctx, &p))
 	}
-	for _, n := range b.Notes {
-		n.ID, n.VehicleID, n.ExternalID = 0, v.ID, ""
-		_ = s.store.CreateNote(ctx, &n)
+	for _, nt := range b.Notes {
+		nt.ID, nt.VehicleID, nt.ExternalID = 0, v.ID, ""
+		add("notes", s.store.CreateNote(ctx, &nt))
 	}
 	for _, d := range b.Days {
 		_ = s.store.PutDawarichDay(ctx, v.ID, d.Date, d.Km, d.TotalKm)
 	}
-	s.store.LogActivity(ctx, v.ID, u.ID, "imported from backup", v.Title())
-	writeJSON(w, http.StatusCreated, v)
+	s.store.LogActivity(ctx, v.ID, uid, "imported from backup", v.Title())
+	return &v, n, nil
+}
+
+// ---- every vehicle of a person (Pocket Move) ----
+
+type garageBackup struct {
+	Format   string          `json:"format"`
+	Version  string          `json:"version"`
+	Exported string          `json:"exported_at"`
+	Vehicles []vehicleBackup `json:"vehicles"`
+}
+
+// handleExportAll is every vehicle the person owns, each as its vehicle
+// backup; POST /import takes it back.
+func (s *Server) handleExportAll(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := userFrom(ctx)
+	vs, err := s.store.ListVehicles(ctx, store.VehicleFilter{UserID: u.ID, OwnerID: u.ID})
+	if err != nil {
+		s.fail(w, err, "export")
+		return
+	}
+	out := garageBackup{Format: "pocket-garage/vehicles", Version: Version, Exported: store.Now(), Vehicles: []vehicleBackup{}}
+	for i := range vs {
+		out.Vehicles = append(out.Vehicles, s.vehicleBackup(ctx, &vs[i]))
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="pocket-garage-%s.json"`, time.Now().Format("2006-01-02")))
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// handleImportAll takes every vehicle of a POST /export.json (or one vehicle
+// backup). It only adds: a vehicle the person already has (same VIN, else
+// the same plate, else the same name, year, make and model) is skipped with
+// everything in it, so the same file twice adds nothing.
+func (s *Server) handleImportAll(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := userFrom(ctx)
+	var in struct {
+		garageBackup
+		Vehicle *store.Vehicle `json:"vehicle"`
+	}
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<20))
+	if err != nil || json.Unmarshal(raw, &in) != nil {
+		writeErr(w, http.StatusBadRequest, "not a Pocket Garage export")
+		return
+	}
+	list := in.Vehicles
+	if in.Vehicle != nil {
+		var one vehicleBackup
+		_ = json.Unmarshal(raw, &one)
+		list = append(list, one)
+	}
+	if len(list) == 0 && in.Format != "pocket-garage/vehicles" {
+		writeErr(w, http.StatusBadRequest, "not a Pocket Garage export")
+		return
+	}
+	have, err := s.store.ListVehicles(ctx, store.VehicleFilter{UserID: u.ID, OwnerID: u.ID})
+	if err != nil {
+		s.fail(w, err, "import")
+		return
+	}
+	res := map[string]int{"vehicles": 0, "skipped": 0, "records": 0, "fuel": 0, "odometer": 0, "reminders": 0, "plans": 0, "notes": 0}
+	for i := range list {
+		b := &list[i]
+		if b.Vehicle == nil {
+			continue
+		}
+		if sameVehicle(have, b.Vehicle) {
+			res["skipped"]++
+			continue
+		}
+		v, n, err := s.importVehicle(ctx, u.ID, b)
+		if err != nil {
+			s.fail(w, err, "import")
+			return
+		}
+		have = append(have, *v)
+		res["vehicles"]++
+		for k, c := range n {
+			res[k] += c
+		}
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// sameVehicle reports whether v is already among have: by VIN when both
+// have one, else by plate when both have one, else by name, year, make and
+// model.
+func sameVehicle(have []store.Vehicle, v *store.Vehicle) bool {
+	norm := func(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), "")) }
+	for _, h := range have {
+		switch {
+		case norm(v.VIN) != "" && norm(h.VIN) != "":
+			if norm(v.VIN) == norm(h.VIN) {
+				return true
+			}
+		case norm(v.Plate) != "" && norm(h.Plate) != "":
+			if norm(v.Plate) == norm(h.Plate) {
+				return true
+			}
+		default:
+			if norm(v.Name) == norm(h.Name) && v.Year == h.Year && norm(v.Make) == norm(h.Make) && norm(v.Model) == norm(h.Model) {
+				return true
+			}
+		}
+	}
+	return false
 }
