@@ -109,6 +109,18 @@ Another Pocket app the person allowed in Pocket Core (Pocket Day, for the journa
 | any linked app | GET `/auth/me` |
 | `vehicles:read` | GET `/vehicles` (`?bare=1` skips the summaries), `/vehicles/{id}`, `/vehicles/{id}/fuel`, `/vehicles/{id}/records` (`?from=&to=`) |
 
+## Pocket Search, Day and Hub
+
+Garage declares three capabilities in its Core manifest (`docs/capabilities.md` in pocket-homelab-core), in the category **Places**, so Pocket Search, Pocket Day and Pocket Hub find it on their own. Each route runs as the person (their own login, or a `pcx_` link token with exactly that scope) and reads only the vehicles they own or were added to; nothing is changed. A link token with one of these scopes opens only its own route and `/auth/me`; `vehicles:read` opens none of them.
+
+| Scope | Route | Answers |
+|---|---|---|
+| `pocket:search` | GET `/pocket/search?q=&limit=` | Vehicles (name, make, model, plate, as the vehicle list finds them), service records (description, notes, workshop, category, tags, parts), fill-ups (station, grade, notes, tags) and reminders (title, notes, category). Ids are `vehicle:<id>`, `record:<id>`, `fill-up:<id>`, `reminder:<id>`; each opens its vehicle's page or tab. A query without a letter or digit finds nothing. Bangs `!garage`, `!car`. |
+| `pocket:day` | GET `/pocket/day/{YYYY-MM-DD}` | The fill-ups (`fuel`, "Fuel: 42 l") and records (`service`; expenses `other`) dated that day, with their amounts, and the reminders due that day (`due`). Summary like "Fuelled the Golf, 62.40 EUR". Days are plain dates, so `?tz=` changes nothing. |
+| `pocket:widget` | GET `/pocket/widget` | Reminders that are overdue, due or coming up (by date or distance, as the reminders page works it out), then each active vehicle's odometer and last fill-up; up to 8 rows. Line like "Oil change due in 12 days"; metrics Due and Soon. Nothing for someone without vehicles. |
+
+There is no quick capture: a fill-up needs its odometer, volume and cost, so it is logged on the Quick log page.
+
 ## Pocket Core events
 
 With Pocket Core on the box, Garage queues these events in the same database write as the change (delivered from an outbox, so a Core outage only delays them). Every payload also carries `owner_id`, `owner_email` and `user_email` (the vehicle owner).

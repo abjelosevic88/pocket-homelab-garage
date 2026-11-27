@@ -373,6 +373,11 @@ func (s *Server) Router() http.Handler {
 			r.Get("/meta", s.handleMeta)
 			r.Get("/reminders", s.handleAllReminders)
 
+			// Pocket Search, Day and Hub (capabilities.go)
+			r.Get("/pocket/search", core.SearchHandler(s.pocketSearch))
+			r.Get("/pocket/day/{date}", core.DayHandler(s.pocketDay))
+			r.Get("/pocket/widget", core.WidgetHandler(s.pocketWidget))
+
 			r.Get("/vehicles", s.handleListVehicles)
 			r.Post("/vehicles", s.handleCreateVehicle)
 			r.Route("/vehicles/{vehicleID}", func(r chi.Router) {
@@ -624,9 +629,11 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 			{App: "inventory", Scopes: inventoryScopes, Reason: "Offer parts and fluids from your shelf on a service record and take the ones you fitted off it"},
 			{App: "movement", Scopes: movementUseScopes, Reason: "Estimate the odometer between fill-ups from the kilometres you drove (your driving journeys; the raw points only if the timeline is not allowed)"},
 		},
-		Services: serviceUses,
-		Offers:   linkOffers,
-		Portable: portable,
+		Services:     serviceUses,
+		Offers:       linkOffers,
+		Portable:     portable,
+		Category:     "Places",
+		Capabilities: capabilities,
 	}
 	if s.cfg.BaseURL != "" {
 		// ask Core for a relying-party client so "Sign in with Pocket Core" needs no configuration

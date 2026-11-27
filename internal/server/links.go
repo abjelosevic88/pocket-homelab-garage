@@ -32,6 +32,16 @@ var portable = &core.Portable{
 	},
 }
 
+// capabilities is what Pocket Search, Pocket Day and Pocket Hub may ask
+// (docs/capabilities.md in pocket-homelab-core): one fixed route each, read
+// as the person, only what that person sees (capabilities.go). No quick
+// capture: a fill-up needs its odometer, volume and cost.
+var capabilities = core.Capabilities{
+	Search: &core.Searchable{What: "Your vehicles, service records, fill-ups and reminders", Kinds: []string{"vehicle", "record", "fill-up", "reminder"}, Bangs: []string{"garage", "car"}},
+	Day:    &core.DayFeed{Label: "Garage", One: "entry", Many: "entries", Unit: "amount", What: "The fill-ups, service and other costs you logged that day, and the reminders due"},
+	Widget: &core.Widget{Title: "Garage", What: "Reminders that are due or coming up, then each vehicle's odometer and last fill-up"},
+}
+
 type linkRoute struct {
 	methods string
 	path    *regexp.Regexp
@@ -52,7 +62,7 @@ var linkRoutes = []linkRoute{
 var errLinkScope = errors.New("outside the link's scope")
 
 func linkAllows(scopes []string, r *http.Request) bool {
-	if portable.LinkAllows(scopes, r) {
+	if portable.LinkAllows(scopes, r) || capabilities.LinkAllows(scopes, r) {
 		return true
 	}
 	for _, lr := range linkRoutes {
